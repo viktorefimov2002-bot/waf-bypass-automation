@@ -44,8 +44,10 @@ class ToolTests(unittest.TestCase):
             validate_replay_argv(split_curl("curl --config /etc/passwd https://example.test/"))
         with self.assertRaisesRegex(ValueError, "local file"):
             validate_replay_argv(split_curl("curl -d @/etc/passwd https://example.test/"))
-        with self.assertRaisesRegex(ValueError, "redirect"):
+        with self.assertRaisesRegex(ValueError, "(?i)redirect"):
             validate_replay_argv(split_curl("curl -L https://example.test/"))
+        with self.assertRaisesRegex(ValueError, "exactly one URL"):
+            validate_replay_argv(split_curl("curl https://example.test/ https://other.test/"))
 
     def test_import_uses_category_mapping_and_dry_run(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
