@@ -1,16 +1,8 @@
 # waf-bypass automation
 
-CLI-инструмент для обработки отчётов `nemesida/waf-bypass` без использования go-ftw, логов WAF или внешней телеметрии.
+CLI-инструмент для обработки JSON-отчётов `nemesida-waf/waf-bypass`, повторной проверки найденных bypass и подготовки кандидатов SecLang-правил.
 
-Инструмент выполняет пять задач:
-
-1. импортирует `BYPASSED` и `cURL.BYPASSED` из JSON;
-2. нормализует варианты и классифицирует их по группам;
-3. безопасно повторяет выбранные cURL и проверяет HTTP-код/`Server`;
-4. сравнивает прогоны до и после исправления;
-5. предлагает кандидаты SecLang для подтверждённых origin bypass и строит матрицу покрытия.
-
-Сгенерированные правила никогда не подключаются к WAF автоматически.
+Инструмент не подключает правила к WAF автоматически. Создание, проверка и развёртывание правил остаются ручным этапом.
 
 ## Требования
 
@@ -18,160 +10,201 @@ CLI-инструмент для обработки отчётов `nemesida/waf-
 - установленный `curl`
 - `openpyxl`
 
-Установка:
-
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Также инструмент можно запускать прямо из каталога проекта:
+Запуск из каталога проекта:
 
 ```bash
 python3 waf_bypass_tool.py --help
 ```
 
-## 1. Импорт
+## Рабочий процесс
+
+### 1. Импорт JSON-отчёта
 
 ```bash
 python3 waf_bypass_tool.py import \
-  --report /path/to/waf-bypass.json \
-  --groups /path/to/groups.txt \
+  --report waf-bypass.json \
+  --groups groups.txt \
   --taxonomy config/taxonomy.json \
-  --overrides config/overrides.json \
-  --output work/normalized.jsonl
+  --output work/imported.jsonl
 ```
 
-Единица результата — вариант запроса. Устойчивый ключ:
+Импортируются только разделы `BYPASSED` и `cURL.BYPASSED`.
+
+Каждый вариант запроса сохраняется отдельной JSONL-записью. Устойчивый ключ:
 
 ```text
 payload_path::variant
 ```
 
-Для каждой записи сохраняются исходный cURL, его SHA-256, зона, кодировка, HTTP-код, группа, извлечённый payload и безопасно нормализованное представление. Декодированный payload остаётся данными и никогда не выполняется.
+Классификация выполняется по категории каталога, например:
 
-`config/overrides.json` содержит согласованную классификацию текущего отчёта. Приоритет:
-
-1. override по точному пути payload;
-2. default-группа категории;
-3. `NO_GROUP` с ручной проверкой.
-
-Группа `85 — Межсайтовый скриптинг (XSS)` является локальным расширением. Импорт завершится ошибкой, если будущий `groups.txt` займёт ID 85.
-
-## 2. XLSX-отчёт
-
-```bash
-python3 waf_bypass_tool.py report \
-  --input work/normalized.jsonl \
-  --groups /path/to/groups.txt \
-  --taxonomy config/taxonomy.json \
-  --output work/classification.xlsx
+```text
+XSS/25.json  -> XSS  -> группа 85
+SQLi/7.json  -> SQLi -> группа 81
+UWA/4.json   -> UWA  -> группа 86
 ```
 
-Листы: `Summary`, `Payload mapping`, `Bypass variants`, `Group summary`.
+`config/overrides.json` больше не требуется для стандартного процесса. Параметр `--overrides` оставлен только для обратной совместимости и неизвестных категорий.
 
-## 3. Dry-run повторной проверки
+### 2. Подтверждение bypass
 
-Для группы XSS:
-
-```bash
-python3 waf_bypass_tool.py recheck \
-  --input work/normalized.jsonl \
-  --group 85 \
-  --output work/xss-dry-run.jsonl
-```
-
-Dry-run ничего не отправляет в сеть. Он проверяет выборку, cURL и целевой host.
-
-## 4. Выполнение cURL
-
-Выполняйте только на ресурсе, для которого у вас есть разрешение:
+Проверка всех импортированных вариантов:
 
 ```bash
-python3 waf_bypass_tool.py recheck \
-  --input work/normalized.jsonl \
-  --group 85 \
-  --allow-host waf-test.example.internal \
-  --limit 20 \
-  --timeout 15 \
-  --delay 0.5 \
+python3 waf_bypass_tool.py verify \
+  --input work/imported.jsonl \
   --execute \
-  --output work/xss-recheck.jsonl
+  --allow-host jutcy.glazapp.com \
+  --output work/verified.jsonl \
+  --report-xlsx work/verified.xlsx
 ```
 
-Защита выполнения:
+Проверка одной группы:
 
-- без `--execute` запросы не отправляются;
-- при `--execute` обязателен точный `--allow-host`;
-- shell не используется (`shell=False`);
-- метод, URL, заголовки и тело исходного запроса не меняются;
-- добавляются только параметры получения response headers, HTTP-кода и ограничения времени;
-- конфликтующие output-параметры исходного cURL приводят к ошибке конкретной записи.
+```bash
+python3 waf_bypass_tool.py verify \
+  --input work/imported.jsonl \
+  --group 85 \
+  --execute \
+  --allow-host jutcy.glazapp.com \
+  --output work/verified-xss.jsonl \
+  --report-xlsx work/verified-xss.xlsx
+```
 
-Матрица вердиктов:
+Без `--execute` команда работает в dry-run и не отправляет запросы.
 
-| HTTP | Server | Результат |
+При реальном запуске обязателен точный `--allow-host`.
+
+Защита replay:
+
+- shell не используется;
+- чтение локальных файлов через cURL запрещено;
+- неизвестные параметры cURL блокируются;
+- `-L/--location` запрещены;
+- redirect не отслеживаются (`--max-redirs 0`);
+- исходные URL, метод, заголовки и тело запроса не переписываются.
+
+### Вердикты
+
+Для текущего стенда:
+
+| HTTP-код | `Server` | Итог |
 |---|---|---|
-| 403 | pingora | `BLOCKED_WAF` |
-| 403 | другое/пусто | `BLOCKED_ROUTE_MISMATCH` |
-| не 403 | nginx/Ubuntu | `BYPASS_ORIGIN_CONFIRMED` |
-| не 403 | pingora | `BYPASS_WAF_CONTRACT_MISMATCH` |
-| не 403 | другое/пусто | `BYPASS_ROUTE_UNCONFIRMED` |
+| код из `BLOCK-CODE` | `pingora` | `BLOCKED_BY_WAF` |
+| не блокирующий код | `nginx` или `Ubuntu` | `BYPASS_CONFIRMED` |
+| не блокирующий код | `pingora` | `BYPASS_UNCONFIRMED` |
+| блокирующий код с origin или неизвестным маршрутом | любое другое значение | `ROUTE_MISMATCH` |
+| timeout, ошибка cURL или отсутствие кода | — | `CHECK_ERROR` |
 
-## 5. Кандидаты SecLang
+Коды блокировки берутся из поля `BLOCK-CODE` исходного JSON, а не считаются всегда равными `403`.
 
-Правила предлагаются только для записей с итогом `BYPASS_ORIGIN_CONFIRMED`:
+Компактный XLSX содержит только три листа:
+
+- `Summary` — общие счётчики по verdict;
+- `Groups` — состояние каждой представленной группы;
+- `Results` — подробные результаты запросов.
+
+### 3. Генерация кандидатов SecLang
 
 ```bash
 python3 waf_bypass_tool.py suggest-rules \
-  --input work/xss-recheck.jsonl \
+  --input work/verified.jsonl \
   --id-start 990000 \
-  --output-dir work/xss-rule-candidates
+  --output-dir work/rules
 ```
 
-Выход:
+Обрабатываются только записи с `BYPASS_CONFIRMED`.
+
+Выходные файлы:
 
 - `candidate-rules.conf` — кандидаты SecLang;
-- `coverage.csv` — соответствие каждого bypass-варианта кандидату;
-- `manifest.json` — параметры, число покрытых вариантов и предупреждения.
+- `coverage.csv` — соответствие каждого bypass правилу;
+- `manifest.json` — параметры правил и статистика покрытия.
 
-Алгоритм объединяет варианты по группе, target, кодировке и exploit primitive. Если безопасно обобщить сигнатуру не удалось, создаётся узкий `narrow_fallback`.
+Генератор пытается объединять несколько bypass одним правилом, если совпадают:
 
-Перед использованием каждого правила обязательны:
+- группа;
+- семейство атаки;
+- exploit primitive;
+- регулярное выражение;
+- цепочка transformations.
 
-1. проверка поддерживаемых target, operator и transforms в текущем движке;
-2. запуск всех положительных cURL из `coverage.csv`;
-3. FP-тестирование на легитимном трафике;
-4. назначение ID из зарезервированного диапазона;
-5. повторный `recheck` после развёртывания;
-6. ручное ревью узких fallback-правил.
+Разные совместимые зоны могут объединяться в один target, например:
 
-Особое предупреждение выводится для transforms на collection targets (`ARGS`, `REQUEST_COOKIES`, `REQUEST_HEADERS`), поскольку конкретная реализация Pingora может поддерживать их не полностью.
+```apache
+SecRule ARGS|REQUEST_COOKIES "@rx ..." \
+    "id:990000,..."
+```
 
-## 6. Сравнение прогонов
+Каждый кандидат требует ручной проверки:
+
+1. синтаксиса SecLang;
+2. поддержки targets и transformations текущим движком;
+3. покрытия всех положительных cURL из `coverage.csv`;
+4. ложных срабатываний на легитимном трафике;
+5. корректности диапазона Rule ID.
+
+### 4. Проверка после внедрения правил
+
+После ручного добавления и развёртывания правил:
+
+```bash
+python3 waf_bypass_tool.py validate-fix \
+  --before work/verified.jsonl \
+  --execute \
+  --allow-host jutcy.glazapp.com \
+  --output-jsonl work/fix-validation.jsonl \
+  --output-xlsx work/fix-validation.xlsx
+```
+
+Только для одной группы:
+
+```bash
+python3 waf_bypass_tool.py validate-fix \
+  --before work/verified.jsonl \
+  --group 85 \
+  --execute \
+  --allow-host jutcy.glazapp.com \
+  --output-jsonl work/xss-fix-validation.jsonl \
+  --output-xlsx work/xss-fix-validation.xlsx
+```
+
+Команда повторяет только запросы, которые до внедрения правил имели `BYPASS_CONFIRMED`.
+
+Статусы:
+
+- `FIXED` — теперь запрос блокируется WAF;
+- `STILL_BYPASSED` — bypass подтверждается повторно;
+- `NEEDS_REVIEW` — маршрут или ответ неоднозначен;
+- `ERROR` — запрос не удалось проверить.
+
+## Дополнительные команды
+
+### Отдельное создание компактного XLSX
+
+```bash
+python3 waf_bypass_tool.py report \
+  --input work/verified.jsonl \
+  --output work/verified.xlsx
+```
+
+### Универсальный diff
+
+`diff` оставлен для произвольного сравнения двух verification-run. Для стандартной проверки исправлений рекомендуется `validate-fix`.
 
 ```bash
 python3 waf_bypass_tool.py diff \
-  --before work/xss-recheck-before.jsonl \
-  --after work/xss-recheck-after.jsonl \
-  --output-jsonl work/xss-diff.jsonl \
-  --output-xlsx work/xss-diff.xlsx
+  --before work/before.jsonl \
+  --after work/after.jsonl \
+  --output-jsonl work/diff.jsonl \
+  --output-xlsx work/diff.xlsx
 ```
-
-Статусы: `FIXED`, `PERSISTENT`, `REGRESSION`, `NEW`, `REMOVED`, `CHANGED`, `ERROR`.
-
-## Рекомендуемый рабочий цикл
-
-1. `import` нового отчёта.
-2. `report` и ручная проверка классификации.
-3. `recheck` сначала без `--execute`.
-4. Ограниченный `recheck --execute` для одной группы.
-5. Отбор только `BYPASS_ORIGIN_CONFIRMED`.
-6. `suggest-rules` и ручное ревью предложений.
-7. Проверка FP и развёртывание одобренных правил.
-8. Повторный `recheck` теми же cURL.
-9. `diff` до/после.
 
 ## Тесты
 
