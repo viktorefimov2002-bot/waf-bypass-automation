@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from .classifier import classify, load_classification_config, load_groups
-from .common import SCHEMA_VERSION, code_verdict, curl_hash, make_run_id, parse_response_code, read_json, utc_now, write_jsonl
+from .common import SCHEMA_VERSION, code_verdict, curl_hash, make_run_id, normalize_block_codes, parse_response_code, read_json, utc_now, write_jsonl
 from .curl_parser import extract_payload, extract_request, normalize_payload, parse_variant
 
 
@@ -26,7 +26,7 @@ def import_report(
     run_id = make_run_id(report_path)
     imported_at = utc_now()
     target = str(report.get("TARGET", ""))
-    block_codes = [int(code) for code in report.get("BLOCK-CODE", [403])]
+    block_codes = normalize_block_codes(report.get("BLOCK-CODE", [403]))
     records: list[dict[str, Any]] = []
 
     missing_curls: list[str] = []
@@ -62,7 +62,7 @@ def import_report(
                 "encoding": encoding,
                 "response_raw": response_raw,
                 "http_code": http_code,
-                "code_verdict": code_verdict(http_code),
+                "code_verdict": code_verdict(http_code, block_codes),
                 "curl": command,
                 "curl_hash": curl_hash(command),
                 "request_host": request["host"],
@@ -84,5 +84,6 @@ def import_report(
         "payload_files": len({record["payload_path"] for record in records}),
         "variants": len(records),
         "groups": len(groups),
+        "block_codes": block_codes,
         "output": str(output_path),
     }
