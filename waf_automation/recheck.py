@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .common import read_jsonl, stable_key, utc_now, write_jsonl
+from .common import code_verdict, normalize_block_codes, read_jsonl, stable_key, utc_now, write_jsonl
 from .curl_parser import extract_request, split_curl
 
 
@@ -16,7 +16,7 @@ SAFE_OPTIONS_WITH_VALUE = {
     "-X", "--request", "-H", "--header", "-d", "--data", "--data-raw", "--data-binary", "--data-urlencode",
     "--cookie", "--user-agent", "--referer",
 }
-SAFE_FLAG_OPTIONS = {"--compressed", "-k", "--insecure", "--http1.1", "--http2", "--path-as-is", "-L", "--location"}
+SAFE_FLAG_OPTIONS = {"--compressed", "-k", "--insecure", "--http1.1", "--http2", "--path-as-is"}
 
 
 def _has_output_conflict(argv: list[str]) -> str | None:
@@ -49,6 +49,8 @@ def validate_replay_argv(argv: list[str]) -> None:
         if item in SAFE_FLAG_OPTIONS:
             index += 1
             continue
+        if item in {"-L", "--location"}:
+            raise ValueError("Redirect following is disabled for safe replay")
         if item.startswith("-"):
             raise ValueError(f"cURL option is not in the replay allowlist: {item}")
         raise ValueError(f"Unexpected positional cURL argument: {item}")
@@ -74,31 +76,29 @@ def _parse_final_headers(raw: bytes) -> tuple[str | None, int | None]:
     return server, status
 
 
-def verdict(http_code: int | None, server: str | None) -> tuple[str, str, str]:
+def verdict(http_code: int | None, server: str | None, block_codes: list[int] | None = None) -> tuple[str, str, str]:
+    block_codes = normalize_block_codes(block_codes)
     server_lower = (server or "").lower()
     if "nginx" in server_lower or "ubuntu" in server_lower:
         route = "ORIGIN_CONFIRMED"
     elif "pingora" in server_lower:
-        route = "WAF_PINGORA"
+        route = "WAF_CONFIRMED"
     elif server:
         route = "ROUTE_OTHER"
     else:
         route = "ROUTE_UNCONFIRMED"
 
-    if http_code == 403:
-        code = "BLOCKED_BY_CODE"
-        final = "BLOCKED_WAF" if route == "WAF_PINGORA" else "BLOCKED_ROUTE_MISMATCH"
-    elif http_code is None:
-        code = "UNKNOWN_CODE"
+    code = code_verdict(http_code, block_codes)
+    if http_code is None:
         final = "CHECK_ERROR"
+    elif http_code in block_codes and route == "WAF_CONFIRMED":
+        final = "BLOCKED_BY_WAF"
+    elif http_code not in block_codes and route == "ORIGIN_CONFIRMED":
+        final = "BYPASS_CONFIRMED"
+    elif http_code in block_codes:
+        final = "ROUTE_MISMATCH"
     else:
-        code = "BYPASS_BY_CODE"
-        if route == "ORIGIN_CONFIRMED":
-            final = "BYPASS_ORIGIN_CONFIRMED"
-        elif route == "WAF_PINGORA":
-            final = "BYPASS_WAF_CONTRACT_MISMATCH"
-        else:
-            final = "BYPASS_ROUTE_UNCONFIRMED"
+        final = "BYPASS_UNCONFIRMED"
     return code, route, final
 
 
@@ -107,25 +107,11 @@ def _execute(record: dict[str, Any], timeout: float) -> dict[str, Any]:
     validate_replay_argv(argv)
     with tempfile.NamedTemporaryFile(prefix="waf-headers-", suffix=".txt") as header_file:
         command = argv + [
-            "--silent",
-            "--show-error",
-            "--output",
-            "/dev/null",
-            "--dump-header",
-            header_file.name,
-            "--write-out",
-            "%{http_code}",
-            "--max-time",
-            str(timeout),
+            "--silent", "--show-error", "--output", "/dev/null", "--dump-header", header_file.name,
+            "--write-out", "%{http_code}", "--max-redirs", "0", "--max-time", str(timeout),
         ]
         started = time.monotonic()
-        completed = subprocess.run(
-            command,
-            shell=False,
-            capture_output=True,
-            timeout=timeout + 5,
-            check=False,
-        )
+        completed = subprocess.run(command, shell=False, capture_output=True, timeout=timeout + 5, check=False)
         duration_ms = round((time.monotonic() - started) * 1000)
         header_file.seek(0)
         header_bytes = header_file.read()
@@ -137,16 +123,11 @@ def _execute(record: dict[str, Any], timeout: float) -> dict[str, Any]:
     if completed.returncode != 0 or http_code in (None, 0):
         code, route, final = "UNKNOWN_CODE", "ROUTE_UNCONFIRMED", "CHECK_ERROR"
     else:
-        code, route, final = verdict(http_code, server)
+        code, route, final = verdict(http_code, server, record.get("block_codes"))
     return {
-        "checked_at": utc_now(),
-        "http_code": http_code,
-        "server_header": server,
-        "code_verdict": code,
-        "route_verdict": route,
-        "final_verdict": final,
-        "duration_ms": duration_ms,
-        "curl_exit_code": completed.returncode,
+        "checked_at": utc_now(), "http_code": http_code, "server_header": server,
+        "code_verdict": code, "route_verdict": route, "final_verdict": final,
+        "duration_ms": duration_ms, "curl_exit_code": completed.returncode,
         "stderr": completed.stderr.decode("utf-8", errors="replace").strip(),
     }
 
@@ -161,9 +142,14 @@ def recheck_records(
     limit: int | None,
     timeout: float,
     delay: float,
+    only_confirmed_bypasses: bool = False,
 ) -> dict[str, Any]:
     records = read_jsonl(input_path)
-    selected = [record for record in records if group_id is None or record.get("group_id") == group_id]
+    selected = [
+        record for record in records
+        if (group_id is None or record.get("group_id") == group_id)
+        and (not only_confirmed_bypasses or record.get("final_verdict") == "BYPASS_CONFIRMED")
+    ]
     if limit is not None:
         selected = selected[:limit]
     results: list[dict[str, Any]] = []
@@ -180,25 +166,15 @@ def recheck_records(
         if execute:
             try:
                 result.update(_execute(record, timeout))
-            except Exception as exc:  # per-request failure must remain in the result set
+            except Exception as exc:
                 result.update({
-                    "checked_at": utc_now(),
-                    "server_header": None,
-                    "route_verdict": "ROUTE_UNCONFIRMED",
-                    "final_verdict": "CHECK_ERROR",
-                    "duration_ms": None,
-                    "curl_exit_code": None,
-                    "stderr": str(exc),
+                    "checked_at": utc_now(), "server_header": None, "route_verdict": "ROUTE_UNCONFIRMED",
+                    "final_verdict": "CHECK_ERROR", "duration_ms": None, "curl_exit_code": None, "stderr": str(exc),
                 })
         else:
             result.update({
-                "checked_at": None,
-                "server_header": None,
-                "route_verdict": "NOT_CHECKED",
-                "final_verdict": "DRY_RUN",
-                "duration_ms": None,
-                "curl_exit_code": None,
-                "stderr": "",
+                "checked_at": None, "server_header": None, "route_verdict": "NOT_CHECKED",
+                "final_verdict": "DRY_RUN", "duration_ms": None, "curl_exit_code": None, "stderr": "",
             })
         results.append(result)
         if execute and delay > 0 and index < len(selected) - 1:
