@@ -7,8 +7,8 @@ from pathlib import Path
 from .diffing import diff_runs
 from .importer import import_report
 from .recheck import recheck_records
-from .report import create_report
-from .rules_compat import suggest_rules
+from .report import create_compact_report, create_report
+from .rules import suggest_rules
 from .validation import validate_fixes
 
 
@@ -19,6 +19,7 @@ def _path(value: str) -> Path:
 def _add_verify_arguments(command: argparse.ArgumentParser) -> None:
     command.add_argument("--input", required=True, type=_path)
     command.add_argument("--output", required=True, type=_path)
+    command.add_argument("--report-xlsx", type=_path, help="Optional compact XLSX report for verification results")
     command.add_argument("--group", type=int, help="Verify only one group. Omit to verify all imported bypass variants.")
     command.add_argument("--execute", action="store_true")
     command.add_argument("--allow-host")
@@ -43,8 +44,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     command = subparsers.add_parser("report", help="Create a compact XLSX report from JSONL")
     command.add_argument("--input", required=True, type=_path)
-    command.add_argument("--groups", required=True, type=_path)
-    command.add_argument("--taxonomy", type=_path)
+    command.add_argument("--groups", type=_path, help="Deprecated; group metadata is already stored in JSONL")
+    command.add_argument("--taxonomy", type=_path, help="Deprecated; group metadata is already stored in JSONL")
     command.add_argument("--output", required=True, type=_path)
 
     command = subparsers.add_parser("verify", help="Dry-run or execute imported cURL variants and confirm real bypasses")
@@ -67,13 +68,13 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--timeout", type=float, default=15.0)
     command.add_argument("--delay", type=float, default=0.2)
 
-    command = subparsers.add_parser("diff", help="Compare verification runs before and after WAF rule changes")
+    command = subparsers.add_parser("diff", help="Compare arbitrary verification runs")
     command.add_argument("--before", required=True, type=_path)
     command.add_argument("--after", required=True, type=_path)
     command.add_argument("--output-jsonl", required=True, type=_path)
     command.add_argument("--output-xlsx", required=True, type=_path)
 
-    command = subparsers.add_parser("suggest-rules", help="Generate candidate SecLang rules for confirmed origin bypasses")
+    command = subparsers.add_parser("suggest-rules", help="Generate candidate SecLang rules for confirmed bypasses")
     command.add_argument("--input", required=True, type=_path)
     command.add_argument("--output-dir", required=True, type=_path)
     command.add_argument("--id-start", required=True, type=int)
@@ -85,7 +86,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "import":
         result = import_report(args.report, args.groups, args.output, args.taxonomy, args.overrides)
     elif args.command == "report":
-        result = create_report(args.input, args.groups, args.output, args.taxonomy)
+        if args.groups:
+            result = create_report(args.input, args.groups, args.output, args.taxonomy)
+        else:
+            result = create_compact_report(args.input, args.output)
     elif args.command in {"verify", "recheck"}:
         result = recheck_records(
             args.input,
@@ -98,6 +102,9 @@ def main(argv: list[str] | None = None) -> int:
             delay=args.delay,
         )
         result["command"] = "verify"
+        if args.report_xlsx:
+            report_result = create_compact_report(args.output, args.report_xlsx)
+            result["report_xlsx"] = report_result["output"]
         if args.command == "recheck":
             result["warning"] = "The recheck command is deprecated; use verify instead."
     elif args.command == "validate-fix":
