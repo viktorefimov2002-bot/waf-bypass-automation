@@ -69,8 +69,24 @@ def parse_response_code(value: Any) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def code_verdict(code: int | None) -> str:
+def normalize_block_codes(value: Any) -> list[int]:
+    if value is None:
+        return [403]
+    if isinstance(value, (int, str)):
+        value = [value]
+    result: list[int] = []
+    for item in value:
+        try:
+            code = int(item)
+        except (TypeError, ValueError):
+            continue
+        if 100 <= code <= 599 and code not in result:
+            result.append(code)
+    return result or [403]
+
+
+def code_verdict(code: int | None, block_codes: Iterable[int] | None = None) -> str:
     if code is None:
         return "UNKNOWN_CODE"
-    return "BLOCKED_BY_CODE" if code == 403 else "BYPASS_BY_CODE"
-
+    blocked = set(normalize_block_codes(block_codes))
+    return "BLOCKED_BY_CODE" if code in blocked else "BYPASS_BY_CODE"
