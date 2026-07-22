@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waf-bypass-automation"
+version = "0.1.0"
+description = "Normalize, recheck, diff and propose SecLang candidates for nemesida/waf-bypass reports"
+requires-python = ">=3.11"
+dependencies = ["openpyxl>=3.1,<4"]
+
+[project.scripts]
+waf-bypass-tool = "waf_automation.cli:main"
+
+[tool.setuptools]
+packages = ["waf_automation"]
