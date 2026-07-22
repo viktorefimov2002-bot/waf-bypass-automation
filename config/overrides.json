@@ -1,0 +1,2512 @@
+{
+  "version": "classification-21-07-v2",
+  "source": "waf-bypass-classification-21-07.xlsx",
+  "payloads": {
+    "API/1.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "В произвольном HTTP-заголовке находится UNION SELECT; зона HEADER не меняет тип атаки."
+    },
+    "API/2.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "В произвольном HTTP-заголовке находится UNION SELECT; зона HEADER не меняет тип атаки."
+    },
+    "API/3.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "В произвольном HTTP-заголовке находится UNION SELECT; зона HEADER не меняет тип атаки."
+    },
+    "CM/6.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Полезная нагрузка выполняет команду ОС; HTTP-метод учитывается отдельно."
+    },
+    "CM/7.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Полезная нагрузка выполняет команду ОС; HTTP-метод учитывается отдельно."
+    },
+    "CM/8.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Полезная нагрузка выполняет команду ОС; HTTP-метод учитывается отдельно."
+    },
+    "CM/9.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Полезная нагрузка выполняет команду ОС; HTTP-метод учитывается отдельно."
+    },
+    "GraphQL/1.json": {
+      "group_id": 68,
+      "group_name": "Интроспекция GraphQL",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Запрос использует __schema/__type и является GraphQL introspection."
+    },
+    "GraphQL/2.json": {
+      "group_id": 68,
+      "group_name": "Интроспекция GraphQL",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Запрос использует __schema/__type и является GraphQL introspection."
+    },
+    "GraphQL/3.json": {
+      "group_id": 74,
+      "group_name": "Утечка важных данных",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "Запрашиваются чувствительные поля (SSN), но отдельной группы контроля GraphQL field authorization нет."
+    },
+    "GraphQL/4.json": {
+      "group_id": 68,
+      "group_name": "Интроспекция GraphQL",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Запрос использует __schema/__type и является GraphQL introspection."
+    },
+    "LDAP/2.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/3.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/5.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/6.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/7.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/9.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/10.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/11.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/12.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/13.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/14.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LDAP/15.json": {
+      "group_id": 30,
+      "group_name": "Внедрение в LDAP-запросы",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "LDAP-фильтры и логические конструкции; кодировка и зона являются вариантами доставки."
+    },
+    "LFI/1.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/4.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/5.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/6.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/7.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/8.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/9.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/10.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/11.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/12.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/13.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/14.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "LFI/15.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Чтение локального файла/путь ОС."
+    },
+    "MFD/3.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "MFD/4.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "SQLi находится в части multipart; повреждение разделителей является техникой доставки."
+    },
+    "MFD/7.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "SQLi находится в части multipart; повреждение разделителей является техникой доставки."
+    },
+    "MFD/8.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Команда ОС находится в части multipart/form-data."
+    },
+    "MFD/9.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Команда ОС находится в части multipart/form-data."
+    },
+    "NoSQLi/1.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/6.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/7.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/8.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/10.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/11.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/12.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/13.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/14.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/15.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/16.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/17.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/20.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/21.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/23.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/25.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/26.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "NoSQLi/27.json": {
+      "group_id": 34,
+      "group_name": "Внедрение NoSQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Операторы/синтаксис MongoDB/NoSQL либо обход NoSQL-предиката."
+    },
+    "OR/1.json": {
+      "group_id": 35,
+      "group_name": "Открытое перенаправление",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload управляет URL перенаправления."
+    },
+    "OR/2.json": {
+      "group_id": 35,
+      "group_name": "Открытое перенаправление",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload управляет URL перенаправления."
+    },
+    "OR/3.json": {
+      "group_id": 35,
+      "group_name": "Открытое перенаправление",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload управляет URL перенаправления."
+    },
+    "OR/5.json": {
+      "group_id": 35,
+      "group_name": "Открытое перенаправление",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload управляет URL перенаправления."
+    },
+    "OR/6.json": {
+      "group_id": 35,
+      "group_name": "Открытое перенаправление",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload управляет URL перенаправления."
+    },
+    "OR/9.json": {
+      "group_id": 35,
+      "group_name": "Открытое перенаправление",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload управляет URL перенаправления."
+    },
+    "RCE/1.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/2.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/3.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/4.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/5.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/6.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/7.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/9.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/12.json": {
+      "group_id": 29,
+      "group_name": "Внедрение в поисковые запросы JNDI",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "JNDI lookup, включая обфусцированные варианты Log4Shell."
+    },
+    "RCE/13.json": {
+      "group_id": 29,
+      "group_name": "Внедрение в поисковые запросы JNDI",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "JNDI lookup, включая обфусцированные варианты Log4Shell."
+    },
+    "RCE/14.json": {
+      "group_id": 29,
+      "group_name": "Внедрение в поисковые запросы JNDI",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "JNDI lookup, включая обфусцированные варианты Log4Shell."
+    },
+    "RCE/15.json": {
+      "group_id": 29,
+      "group_name": "Внедрение в поисковые запросы JNDI",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "JNDI lookup, включая обфусцированные варианты Log4Shell."
+    },
+    "RCE/16.json": {
+      "group_id": 29,
+      "group_name": "Внедрение в поисковые запросы JNDI",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "JNDI lookup, включая обфусцированные варианты Log4Shell."
+    },
+    "RCE/17.json": {
+      "group_id": 29,
+      "group_name": "Внедрение в поисковые запросы JNDI",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "JNDI lookup, включая обфусцированные варианты Log4Shell."
+    },
+    "RCE/18.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/19.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/20.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/21.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/22.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/23.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "В запросе виден только путь /etc/passwd без команды; по фактическому примитиву это ближе к LFI."
+    },
+    "RCE/24.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/25.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/26.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/28.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/29.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RCE/30.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Shell-команда/подстановка команды или RCE через командный интерпретатор."
+    },
+    "RFI/1.json": {
+      "group_id": 37,
+      "group_name": "Внедрение команд ОС",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Удалённый ресурс загружается командой ОС wget."
+    },
+    "RFI/2.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "Remote file inclusion заставляет сервер получить удалённый ресурс; ближайший защитный примитив — SSRF. Отдельной RFI-группы нет."
+    },
+    "RFI/3.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "Remote file inclusion заставляет сервер получить удалённый ресурс; ближайший защитный примитив — SSRF. Отдельной RFI-группы нет."
+    },
+    "RFI/4.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "Remote file inclusion заставляет сервер получить удалённый ресурс; ближайший защитный примитив — SSRF. Отдельной RFI-группы нет."
+    },
+    "RFI/5.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "Remote file inclusion заставляет сервер получить удалённый ресурс; ближайший защитный примитив — SSRF. Отдельной RFI-группы нет."
+    },
+    "RFI/6.json": {
+      "group_id": 31,
+      "group_name": "Внедрение локальных файлов (LFI)",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP wrapper обращается к локальному ресурсу; отдельной RFI-группы нет."
+    },
+    "SQLi/1.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/2.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/3.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/4.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/5.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/6.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/7.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/13.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/14.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/15.json": {
+      "group_id": 82,
+      "group_name": "Внедрение SQL-кода на основе времени",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "SQL-запрос содержит задержку времени."
+    },
+    "SQLi/16.json": {
+      "group_id": 82,
+      "group_name": "Внедрение SQL-кода на основе времени",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "SQL-запрос содержит задержку времени."
+    },
+    "SQLi/17.json": {
+      "group_id": 82,
+      "group_name": "Внедрение SQL-кода на основе времени",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "SQL-запрос содержит задержку времени."
+    },
+    "SQLi/18.json": {
+      "group_id": 82,
+      "group_name": "Внедрение SQL-кода на основе времени",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "SQL-запрос содержит задержку времени."
+    },
+    "SQLi/19.json": {
+      "group_id": 80,
+      "group_name": "Внедрение SQL-кода на основе ошибок",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Получение данных построено на SQL/XML-функции, вызывающей диагностическую ошибку."
+    },
+    "SQLi/20.json": {
+      "group_id": 82,
+      "group_name": "Внедрение SQL-кода на основе времени",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "SQL-запрос содержит задержку времени."
+    },
+    "SQLi/21.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/22.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/23.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/24.json": {
+      "group_id": 82,
+      "group_name": "Внедрение SQL-кода на основе времени",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "SQL-запрос содержит задержку времени."
+    },
+    "SQLi/27.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SQLi/28.json": {
+      "group_id": 81,
+      "group_name": "Внедрение SQL-кода",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Общий SQLi: UNION/boolean/comment/stacked query без обязательного временного или error-based признака."
+    },
+    "SSI/1.json": {
+      "group_id": 43,
+      "group_name": "Внедрение во включения на стороне сервера (SSI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Директива server-side include, включая exec cmd."
+    },
+    "SSI/2.json": {
+      "group_id": 43,
+      "group_name": "Внедрение во включения на стороне сервера (SSI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Директива server-side include, включая exec cmd."
+    },
+    "SSI/3.json": {
+      "group_id": 43,
+      "group_name": "Внедрение во включения на стороне сервера (SSI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Директива server-side include, включая exec cmd."
+    },
+    "SSI/4.json": {
+      "group_id": 43,
+      "group_name": "Внедрение во включения на стороне сервера (SSI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Директива server-side include, включая exec cmd."
+    },
+    "SSI/5.json": {
+      "group_id": 43,
+      "group_name": "Внедрение во включения на стороне сервера (SSI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Директива server-side include, включая exec cmd."
+    },
+    "SSRF/1.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/2.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/3.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/4.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/5.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/6.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/7.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/8.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/9.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/10.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/11.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/12.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/13.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/14.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/15.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/16.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/17.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSRF/18.json": {
+      "group_id": 77,
+      "group_name": "Подделка запроса со стороны сервера (SSRF)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL/схема/адрес заставляют сервер обратиться к внутреннему или внешнему ресурсу."
+    },
+    "SSTI/1.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/2.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/3.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/4.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/5.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/6.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/7.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/8.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/9.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/10.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/11.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/12.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/13.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/14.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/15.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/16.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/17.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/18.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "SSTI/19.json": {
+      "group_id": 45,
+      "group_name": "Внедрение шаблона на стороне сервера (SSTI)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Шаблонное выражение вычисляется на стороне сервера."
+    },
+    "UWA/1.json": {
+      "group_id": 73,
+      "group_name": "Утечка данных о системе контроля версий",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к артефактам Git/SVN."
+    },
+    "UWA/2.json": {
+      "group_id": 73,
+      "group_name": "Утечка данных о системе контроля версий",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к артефактам Git/SVN."
+    },
+    "UWA/3.json": {
+      "group_id": 73,
+      "group_name": "Утечка данных о системе контроля версий",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к артефактам Git/SVN."
+    },
+    "UWA/4.json": {
+      "group_id": 73,
+      "group_name": "Утечка данных о системе контроля версий",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к артефактам Git/SVN."
+    },
+    "UWA/5.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/6.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/7.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/8.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/9.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/10.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/11.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/12.json": {
+      "group_id": null,
+      "group_name": "ВНЕ ТАКСОНОМИИ: доступ к web-shell URL",
+      "match_type": "Нет группы",
+      "confidence": "Высокая",
+      "reason": "Запрашивается wso.php; группы есть для загрузки или содержимого web-shell в ответе, но не для доступа по URL."
+    },
+    "UWA/14.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/15.json": {
+      "group_id": 76,
+      "group_name": "Доступность важных статических файлов",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "URL обращается к backup/dump/swap/скрытому статическому файлу."
+    },
+    "UWA/17.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/18.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/19.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/20.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/21.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/22.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/23.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/24.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/25.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/26.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "UWA/27.json": {
+      "group_id": 65,
+      "group_name": "Не проверять статические ресурсы",
+      "match_type": "Ближайшее",
+      "confidence": "Средняя",
+      "reason": "PHP-ресурс маскируется под .png/статический URL, чтобы обойти исключение статических ресурсов."
+    },
+    "XSS/1.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/2.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/21.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/22.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/23.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/27.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/30.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/34.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/36.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/41.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/42.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/59.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/61.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/62.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/63.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/75.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/76.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/78.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/79.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/89.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/90.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/91.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/94.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/95.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/96.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/97.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/98.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/99.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/100.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/101.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/102.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/104.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/105.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/106.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/107.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/108.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/109.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/126.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/127.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/130.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/132.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/146.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/147.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/148.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/150.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/151.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/157.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/162.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/170.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/179.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/180.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/181.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/182.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/183.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/184.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/185.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/186.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/187.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/188.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/189.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/190.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/191.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/192.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/193.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/194.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/195.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/196.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/198.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/199.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/200.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/201.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/202.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/203.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/204.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/205.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/206.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/208.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/209.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/210.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/211.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/212.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/213.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/214.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/215.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/216.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/217.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/218.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/219.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/221.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/222.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/223.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/224.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/225.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/227.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/230.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/231.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/232.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/233.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/234.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/235.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/236.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/237.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/238.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/239.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/240.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/241.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/242.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/243.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/244.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/245.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/246.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/247.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/252.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/256.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/257.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/258.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/259.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/260.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/261.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/263.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/264.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/265.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/266.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/267.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/270.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/271.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/272.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/273.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/274.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/276.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/279.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/281.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/282.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/284.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/285.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/289.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/292.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/293.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/294.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/295.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/301.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/302.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/303.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/304.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/305.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/306.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/309.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/312.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/313.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/315.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/317.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/318.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/319.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/320.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/321.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/322.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/324.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/328.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/329.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/331.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/340.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/342.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/343.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/345.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/349.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/358.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/363.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/365.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/372.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/373.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/374.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/376.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    },
+    "XSS/378.json": {
+      "group_id": 85,
+      "group_name": "Межсайтовый скриптинг (XSS)",
+      "match_type": "Точное",
+      "confidence": "Высокая",
+      "reason": "Payload содержит XSS/JavaScript-инъекцию и отнесён к дополнительной группе XSS независимо от каталога источника и зоны доставки."
+    }
+  }
+}

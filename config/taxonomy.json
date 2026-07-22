@@ -1,0 +1,24 @@
+{
+  "version": "2026-07-21",
+  "additional_groups": [
+    {
+      "id": 85,
+      "name": "Межсайтовый скриптинг (XSS)",
+      "source": "local"
+    }
+  ],
+  "category_defaults": {
+    "XSS": 85,
+    "SQLi": 81,
+    "CM": 37,
+    "RCE": 37,
+    "LFI": 31,
+    "LDAP": 30,
+    "NoSQLi": 34,
+    "OR": 35,
+    "SSI": 43,
+    "SSRF": 77,
+    "SSTI": 45
+  }
+}
+

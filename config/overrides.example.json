@@ -1,0 +1,18 @@
+{
+  "version": "example",
+  "payloads": {
+    "XSS/1.json": {
+      "group_id": 85,
+      "match_type": "EXACT",
+      "confidence": "HIGH",
+      "reason": "Confirmed XSS payload"
+    },
+    "UWA/12.json": {
+      "group_id": null,
+      "group_name": "ВНЕ ТАКСОНОМИИ: доступ к web-shell URL",
+      "confidence": "HIGH",
+      "reason": "No suitable group in the current taxonomy"
+    }
+  }
+}
+
