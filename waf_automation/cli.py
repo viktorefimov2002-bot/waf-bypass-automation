@@ -8,7 +8,7 @@ from .diffing import diff_runs
 from .importer import import_report
 from .recheck import recheck_records
 from .report import create_report
-from .rules import suggest_rules
+from .rules_compat import suggest_rules
 from .validation import validate_fixes
 
 
