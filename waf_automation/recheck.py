@@ -32,10 +32,12 @@ def validate_replay_argv(argv: list[str]) -> None:
     conflict = _has_output_conflict(argv)
     if conflict:
         raise ValueError(f"cURL has conflicting output option: {conflict}")
+    url_count = 0
     index = 1
     while index < len(argv):
         item = argv[index]
         if item.startswith(("http://", "https://")):
+            url_count += 1
             index += 1
             continue
         if item in SAFE_OPTIONS_WITH_VALUE:
@@ -54,6 +56,8 @@ def validate_replay_argv(argv: list[str]) -> None:
         if item.startswith("-"):
             raise ValueError(f"cURL option is not in the replay allowlist: {item}")
         raise ValueError(f"Unexpected positional cURL argument: {item}")
+    if url_count != 1:
+        raise ValueError(f"Replay requires exactly one URL, found {url_count}")
 
 
 def _parse_final_headers(raw: bytes) -> tuple[str | None, int | None]:
@@ -168,8 +172,10 @@ def recheck_records(
                 result.update(_execute(record, timeout))
             except Exception as exc:
                 result.update({
-                    "checked_at": utc_now(), "server_header": None, "route_verdict": "ROUTE_UNCONFIRMED",
-                    "final_verdict": "CHECK_ERROR", "duration_ms": None, "curl_exit_code": None, "stderr": str(exc),
+                    "checked_at": utc_now(), "http_code": None, "server_header": None,
+                    "code_verdict": "UNKNOWN_CODE", "route_verdict": "ROUTE_UNCONFIRMED",
+                    "final_verdict": "CHECK_ERROR", "duration_ms": None,
+                    "curl_exit_code": None, "stderr": str(exc),
                 })
         else:
             result.update({
