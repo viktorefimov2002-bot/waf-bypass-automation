@@ -26,16 +26,25 @@ def load_groups(groups_path: Path, taxonomy_path: Path | None = None) -> dict[in
     return groups
 
 
-def load_classification_config(taxonomy_path: Path | None, overrides_path: Path | None) -> tuple[dict[str, int], dict[str, dict[str, Any]]]:
+def load_classification_config(
+    taxonomy_path: Path | None,
+    overrides_path: Path | None,
+) -> tuple[dict[str, int], dict[str, dict[str, Any]]]:
+    """Load deterministic category mappings.
+
+    Payload-level overrides are retained only for backward compatibility with
+    existing invocations. The main classification path is category -> group.
+    """
     category_defaults: dict[str, int] = {}
     if taxonomy_path:
         raw = read_json(taxonomy_path)
         category_defaults = {str(k): int(v) for k, v in raw.get("category_defaults", {}).items()}
-    overrides: dict[str, dict[str, Any]] = {}
+
+    legacy_overrides: dict[str, dict[str, Any]] = {}
     if overrides_path and overrides_path.exists():
         raw_overrides = read_json(overrides_path)
-        overrides = {str(k): dict(v) for k, v in raw_overrides.get("payloads", {}).items()}
-    return category_defaults, overrides
+        legacy_overrides = {str(k): dict(v) for k, v in raw_overrides.get("payloads", {}).items()}
+    return category_defaults, legacy_overrides
 
 
 def classify(
@@ -45,31 +54,12 @@ def classify(
     category_defaults: dict[str, int],
     overrides: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    override = overrides.get(payload_path)
-    if override is not None:
-        group_id = override.get("group_id")
-        if group_id in (None, ""):
-            return {
-                "group_id": None,
-                "group_name": str(override.get("group_name") or "ВНЕ ТАКСОНОМИИ"),
-                "classification_type": "NO_GROUP",
-                "classification_confidence": str(override.get("confidence", "HIGH")),
-                "classification_reason": str(override.get("reason", "Manual override: no group")),
-                "classification_source": "override",
-            }
-        group_id = int(group_id)
-        group = groups.get(group_id)
-        if not group:
-            raise ValueError(f"Override for {payload_path} references missing group {group_id}")
-        return {
-            "group_id": group_id,
-            "group_name": group["name"],
-            "classification_type": str(override.get("match_type", "EXACT")),
-            "classification_confidence": str(override.get("confidence", "HIGH")),
-            "classification_reason": str(override.get("reason", "Manual payload override")),
-            "classification_source": "override",
-        }
+    """Classify by the stable waf-bypass category.
 
+    A legacy payload override is consulted only when the category itself has no
+    deterministic mapping. This keeps old configuration files readable without
+    making them part of the normal workflow.
+    """
     group_id = category_defaults.get(category)
     if group_id is not None:
         group = groups.get(group_id)
@@ -79,17 +69,33 @@ def classify(
             "group_id": group_id,
             "group_name": group["name"],
             "classification_type": "CATEGORY_DEFAULT",
-            "classification_confidence": "MEDIUM",
-            "classification_reason": f"Default group for category {category}; analyst review required",
+            "classification_confidence": "HIGH",
+            "classification_reason": f"Deterministic mapping for waf-bypass category {category}",
             "classification_source": "category_default",
         }
+
+    override = overrides.get(payload_path)
+    if override is not None:
+        override_group_id = override.get("group_id")
+        if override_group_id not in (None, ""):
+            override_group_id = int(override_group_id)
+            group = groups.get(override_group_id)
+            if not group:
+                raise ValueError(f"Override for {payload_path} references missing group {override_group_id}")
+            return {
+                "group_id": override_group_id,
+                "group_name": group["name"],
+                "classification_type": "LEGACY_OVERRIDE",
+                "classification_confidence": str(override.get("confidence", "HIGH")),
+                "classification_reason": str(override.get("reason", "Legacy payload override")),
+                "classification_source": "legacy_override",
+            }
 
     return {
         "group_id": None,
         "group_name": "ВНЕ ТАКСОНОМИИ / НУЖНА ПРОВЕРКА",
         "classification_type": "NO_GROUP",
         "classification_confidence": "LOW",
-        "classification_reason": "No override or deterministic category mapping",
+        "classification_reason": f"No deterministic mapping for category {category}",
         "classification_source": "unclassified",
     }
-
