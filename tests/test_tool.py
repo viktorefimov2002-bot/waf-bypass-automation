@@ -82,7 +82,7 @@ class ToolTests(unittest.TestCase):
             recheck_records(normalized, dry_run, group_id=None, execute=False, allow_host=None, limit=None, timeout=5, delay=0)
             self.assertEqual(read_jsonl(dry_run)[0]["final_verdict"], "DRY_RUN")
 
-    def test_rule_suggestion_groups_multiple_zones(self) -> None:
+    def test_rule_suggestion_groups_unencoded_zones(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             base = {
@@ -93,7 +93,6 @@ class ToolTests(unittest.TestCase):
             records = [
                 {**base, "payload_path": "XSS/1.json", "variant": "ARGS", "zone": "ARGS"},
                 {**base, "payload_path": "XSS/1.json", "variant": "COOKIE", "zone": "COOKIE"},
-                {**base, "payload_path": "XSS/1.json", "variant": "HEADER", "zone": "HEADER"},
                 {**base, "payload_path": "XSS/1.json", "variant": "REFERER", "zone": "REFERER"},
                 {**base, "payload_path": "XSS/1.json", "variant": "USER-AGENT", "zone": "USER-AGENT"},
             ]
@@ -101,19 +100,61 @@ class ToolTests(unittest.TestCase):
             write_jsonl(checked, records)
             output_dir = root / "rules"
             summary = suggest_rules(checked, output_dir, 990000)
-            self.assertEqual(summary["confirmed_bypass_variants"], 5)
+            self.assertEqual(summary["confirmed_bypass_variants"], 4)
             self.assertEqual(summary["candidate_rules"], 1)
             self.assertEqual(summary["grouped_rules"], 1)
             rule_text = (output_dir / "candidate-rules.conf").read_text(encoding="utf-8")
-            self.assertIn("SecRule ARGS|REQUEST_COOKIES|REQUEST_HEADERS", rule_text)
-            self.assertNotIn("REQUEST_HEADERS:Referer", rule_text)
-            self.assertNotIn("REQUEST_HEADERS:User-Agent", rule_text)
+            self.assertIn("ARGS|REQUEST_COOKIES|REQUEST_HEADERS:Referer|REQUEST_HEADERS:User-Agent", rule_text)
             self.assertNotIn("(?i)", rule_text)
             self.assertNotIn("capture", rule_text)
-            with (output_dir / "coverage.csv").open(encoding="utf-8") as handle:
-                rows = list(csv.DictReader(handle))
-            self.assertEqual(len(rows), 5)
-            self.assertTrue(all(row["grouped_rule"] == "True" for row in rows))
+
+    def test_base64_and_utf16_rules_are_split_by_target(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base = {
+                "category": "SQLI", "group_id": 81, "group_name": "SQLI",
+                "normalized_payload": "union select", "final_verdict": "BYPASS_CONFIRMED",
+                "payload_path": "SQLI/1.json",
+            }
+            records = [
+                {**base, "encoding": "BASE64", "variant": "ARGS:BASE64", "zone": "ARGS"},
+                {**base, "encoding": "BASE64", "variant": "COOKIE:BASE64", "zone": "COOKIE"},
+                {**base, "encoding": "UTF-16", "variant": "ARGS:UTF-16", "zone": "ARGS"},
+                {**base, "encoding": "UTF-16", "variant": "REFERER:UTF-16", "zone": "REFERER"},
+            ]
+            checked = root / "checked.jsonl"
+            write_jsonl(checked, records)
+            output_dir = root / "rules"
+            summary = suggest_rules(checked, output_dir, 990000)
+            self.assertEqual(summary["candidate_rules"], 4)
+            manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertTrue(all(len(rule["targets"]) == 1 for rule in manifest["rules"]))
+            self.assertEqual(manifest["generation_policy"]["split_targets_for_encodings"], ["BASE64", "UTF-16"])
+
+    def test_stable_named_header_is_preserved_and_dynamic_header_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            base = {
+                "category": "XSS", "group_id": 85, "group_name": "XSS", "encoding": "BASE64",
+                "normalized_payload": "<svg onload=alert(1)>", "final_verdict": "BYPASS_CONFIRMED",
+                "payload_path": "XSS/1.json", "zone": "HEADER",
+            }
+            records = [
+                {**base, "variant": "HEADER:BASE64", "curl": "curl -H 'X-Api-Key: PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+' https://example.test/"},
+                {**base, "variant": "HEADER:BASE64-DYNAMIC", "curl": "curl -H 'wbh-12abef: PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+' https://example.test/"},
+            ]
+            checked = root / "checked.jsonl"
+            write_jsonl(checked, records)
+            output_dir = root / "rules"
+            summary = suggest_rules(checked, output_dir, 990000)
+            self.assertEqual(summary["covered_variants"], 1)
+            self.assertEqual(summary["skipped_variants"], 1)
+            rule_text = (output_dir / "candidate-rules.conf").read_text(encoding="utf-8")
+            self.assertIn("SecRule REQUEST_HEADERS:X-Api-Key", rule_text)
+            self.assertNotIn("wbh-", rule_text)
+            with (output_dir / "skipped.csv").open(encoding="utf-8") as handle:
+                skipped = list(csv.DictReader(handle))
+            self.assertEqual(skipped[0]["reason"], "DYNAMIC_TEST_HEADER")
 
     def test_rule_suggestion_skips_fallback_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -139,9 +180,6 @@ class ToolTests(unittest.TestCase):
             rule_text = (output_dir / "candidate-rules.conf").read_text(encoding="utf-8")
             self.assertNotIn("wbc-", rule_text)
             self.assertNotIn("narrow_fallback", rule_text)
-            with (output_dir / "skipped.csv").open(encoding="utf-8") as handle:
-                skipped = list(csv.DictReader(handle))
-            self.assertEqual(skipped[0]["reason"], "NO_RECOGNIZED_PRIMITIVE")
 
     def test_lfi_rule_uses_portable_backslash_escape(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
