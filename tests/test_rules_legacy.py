@@ -29,7 +29,7 @@ class LegacySecLangRuleTests(unittest.TestCase):
                 "group_id": 37,
                 "group_name": "Внедрение команд ОС",
                 "encoding": "NONE",
-                "normalized_payload": "$(whoami)",
+                "normalized_payload": "$(printf test)",
                 "final_verdict": "BYPASS_CONFIRMED",
                 "payload_path": "CM/1.json",
                 "variant": "COOKIE",
