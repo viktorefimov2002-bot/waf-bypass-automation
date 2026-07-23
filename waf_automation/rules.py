@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .common import read_jsonl, stable_key, write_json
+from .curl_parser import STANDARD_HEADERS, extract_request
 
 TARGETS = {
     "URL": "REQUEST_URI",
@@ -15,8 +16,11 @@ TARGETS = {
     "COOKIE": "REQUEST_COOKIES",
     "USER-AGENT": "REQUEST_HEADERS:User-Agent",
     "REFERER": "REQUEST_HEADERS:Referer",
-    "HEADER": "REQUEST_HEADERS",
 }
+SUPPORTED_ENCODINGS = {"NONE", "BASE64", "UTF-16", "HTML-ENTITY"}
+SEPARATE_TARGET_ENCODINGS = {"BASE64", "UTF-16"}
+DYNAMIC_HEADER_RE = re.compile(r"^(?:wbh|wbc)-[0-9a-f]+$", re.IGNORECASE)
+HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 
 SIGNATURES: dict[str, list[tuple[str, str]]] = {
     "xss": [
@@ -83,10 +87,45 @@ def _transforms(encoding: str, family: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(result))
 
 
+def _header_names(record: dict[str, Any]) -> list[str]:
+    command = str(record.get("curl") or "")
+    if not command:
+        return []
+    try:
+        headers = extract_request(command)["headers"]
+    except (TypeError, ValueError):
+        return []
+    names: list[str] = []
+    for header in headers:
+        name, separator, _ = header.partition(":")
+        normalized = name.strip()
+        if not separator or normalized.lower() in STANDARD_HEADERS:
+            continue
+        if normalized not in names:
+            names.append(normalized)
+    return names
+
+
+def _record_target(record: dict[str, Any]) -> tuple[str | None, str | None]:
+    zone = str(record.get("zone", "")).upper()
+    if zone != "HEADER":
+        target = TARGETS.get(zone)
+        return (target, None) if target else (None, "UNSUPPORTED_ZONE")
+
+    names = _header_names(record)
+    if len(names) != 1:
+        return None, "AMBIGUOUS_OR_MISSING_HEADER_NAME"
+    name = names[0]
+    if DYNAMIC_HEADER_RE.fullmatch(name):
+        return None, "DYNAMIC_TEST_HEADER"
+    if not HEADER_NAME_RE.fullmatch(name):
+        return None, "INVALID_HEADER_NAME"
+    return f"REQUEST_HEADERS:{name}", None
+
+
 def _deduplicate_targets(targets: set[str]) -> list[str]:
     if "REQUEST_HEADERS" in targets:
-        targets.discard("REQUEST_HEADERS:Referer")
-        targets.discard("REQUEST_HEADERS:User-Agent")
+        targets = {target for target in targets if not target.startswith("REQUEST_HEADERS:")}
     return sorted(targets)
 
 
@@ -131,21 +170,43 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
     skipped_rows: list[dict[str, Any]] = []
 
     for record in records:
+        encoding = str(record.get("encoding", "NONE")).upper()
+        if encoding not in SUPPORTED_ENCODINGS:
+            skipped_rows.append({
+                "stable_key": stable_key(record), "payload_path": record.get("payload_path"),
+                "variant": record.get("variant"), "group_id": record.get("group_id"),
+                "category": record.get("category"), "zone": record.get("zone"),
+                "encoding": encoding, "reason": "UNSUPPORTED_ENCODING",
+            })
+            continue
+
+        target, target_error = _record_target(record)
+        if target_error:
+            skipped_rows.append({
+                "stable_key": stable_key(record), "payload_path": record.get("payload_path"),
+                "variant": record.get("variant"), "group_id": record.get("group_id"),
+                "category": record.get("category"), "zone": record.get("zone"),
+                "encoding": encoding, "reason": target_error,
+            })
+            continue
+
         signature = _select_signature(record)
         if signature is None:
             skipped_rows.append({
                 "stable_key": stable_key(record), "payload_path": record.get("payload_path"),
                 "variant": record.get("variant"), "group_id": record.get("group_id"),
                 "category": record.get("category"), "zone": record.get("zone"),
-                "encoding": record.get("encoding"), "reason": "NO_RECOGNIZED_PRIMITIVE",
+                "encoding": encoding, "reason": "NO_RECOGNIZED_PRIMITIVE",
             })
             continue
+
         family, primitive, pattern = signature
         _validate_pattern(pattern)
-        transforms = _transforms(str(record.get("encoding", "NONE")), family)
+        transforms = _transforms(encoding, family)
         signature_key = f"{family}|{primitive}|{pattern}"
         signatures[signature_key] = (family, primitive, pattern)
-        clusters[(record.get("group_id"), record.get("group_name"), signature_key, transforms)].append(record)
+        target_partition = target if encoding in SEPARATE_TARGET_ENCODINGS else "MERGED"
+        clusters[(record.get("group_id"), record.get("group_name"), signature_key, transforms, target_partition)].append({**record, "_rule_target": target})
 
     if not clusters:
         raise ValueError("Confirmed bypasses were found, but none matched a supported exploit primitive")
@@ -153,10 +214,10 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
     rules: list[dict[str, Any]] = []
     coverage_rows: list[dict[str, Any]] = []
     for offset, (key, covered) in enumerate(sorted(clusters.items(), key=lambda item: tuple(map(str, item[0])))):
-        group_id, group_name, signature_key, transforms = key
+        group_id, group_name, signature_key, transforms, _ = key
         family, primitive, pattern = signatures[signature_key]
-        targets = _deduplicate_targets({TARGETS.get(str(record.get("zone")), "REQUEST_URI") for record in covered})
-        encodings = sorted({str(record.get("encoding", "NONE")) for record in covered})
+        targets = _deduplicate_targets({str(record["_rule_target"]) for record in covered})
+        encodings = sorted({str(record.get("encoding", "NONE")).upper() for record in covered})
         target = "|".join(targets)
         rule = {
             "rule_id": id_start + offset, "group_id": group_id, "group_name": group_name,
@@ -178,7 +239,8 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
     conf_path = output_dir / "candidate-rules.conf"
     conf_path.write_text(
         "# Auto-generated candidate SecLang rules. DO NOT auto-load.\n"
-        "# Only recognized exploit primitives are emitted; fallback payload rules are skipped.\n\n"
+        "# Only recognized exploit primitives are emitted; fallback payload rules are skipped.\n"
+        "# BASE64 and UTF-16 candidates are separated by request target.\n\n"
         + "\n".join(_render_rule(rule) for rule in rules), encoding="utf-8"
     )
     coverage_path = output_dir / "coverage.csv"
@@ -198,6 +260,10 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             "recognized_primitives_only": True, "family_fallbacks": False,
             "narrow_fallbacks": False, "inline_regex_flags": False,
             "deduplicate_generic_headers": True,
+            "split_targets_for_encodings": sorted(SEPARATE_TARGET_ENCODINGS),
+            "preserve_stable_named_headers": True,
+            "skip_dynamic_test_headers": True,
+            "supported_encodings": sorted(SUPPORTED_ENCODINGS),
         },
         "rules": rules,
     })
