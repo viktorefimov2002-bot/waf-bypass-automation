@@ -61,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--before", required=True, type=_path)
     command.add_argument("--output-jsonl", required=True, type=_path)
     command.add_argument("--output-xlsx", required=True, type=_path)
+    command.add_argument("--coverage", type=_path, help="coverage.csv from suggest-rules for payload-to-rule mapping")
+    command.add_argument("--manifest", type=_path, help="manifest.json from suggest-rules for rule pattern and transform metadata")
     command.add_argument("--group", type=int)
     command.add_argument("--execute", action="store_true")
     command.add_argument("--allow-host")
@@ -118,6 +120,8 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             timeout=args.timeout,
             delay=args.delay,
+            coverage_path=args.coverage,
+            manifest_path=args.manifest,
         )
     elif args.command == "diff":
         result = diff_runs(args.before, args.after, args.output_jsonl, args.output_xlsx)
