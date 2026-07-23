@@ -79,10 +79,7 @@ class ToolTests(unittest.TestCase):
             self.assertIn("<svg/onload=alert(1)>", imported["normalized_payload"])
 
             dry_run = root / "dry-run.jsonl"
-            recheck_records(
-                normalized, dry_run, group_id=None, execute=False, allow_host=None,
-                limit=None, timeout=5, delay=0,
-            )
+            recheck_records(normalized, dry_run, group_id=None, execute=False, allow_host=None, limit=None, timeout=5, delay=0)
             self.assertEqual(read_jsonl(dry_run)[0]["final_verdict"], "DRY_RUN")
 
     def test_rule_suggestion_groups_multiple_zones(self) -> None:
@@ -96,21 +93,71 @@ class ToolTests(unittest.TestCase):
             records = [
                 {**base, "payload_path": "XSS/1.json", "variant": "ARGS", "zone": "ARGS"},
                 {**base, "payload_path": "XSS/1.json", "variant": "COOKIE", "zone": "COOKIE"},
+                {**base, "payload_path": "XSS/1.json", "variant": "HEADER", "zone": "HEADER"},
+                {**base, "payload_path": "XSS/1.json", "variant": "REFERER", "zone": "REFERER"},
+                {**base, "payload_path": "XSS/1.json", "variant": "USER-AGENT", "zone": "USER-AGENT"},
             ]
             checked = root / "checked.jsonl"
             write_jsonl(checked, records)
             output_dir = root / "rules"
             summary = suggest_rules(checked, output_dir, 990000)
-            self.assertEqual(summary["confirmed_bypass_variants"], 2)
+            self.assertEqual(summary["confirmed_bypass_variants"], 5)
             self.assertEqual(summary["candidate_rules"], 1)
             self.assertEqual(summary["grouped_rules"], 1)
-            self.assertEqual(summary["max_variants_per_rule"], 2)
             rule_text = (output_dir / "candidate-rules.conf").read_text(encoding="utf-8")
-            self.assertIn("SecRule ARGS|REQUEST_COOKIES", rule_text)
+            self.assertIn("SecRule ARGS|REQUEST_COOKIES|REQUEST_HEADERS", rule_text)
+            self.assertNotIn("REQUEST_HEADERS:Referer", rule_text)
+            self.assertNotIn("REQUEST_HEADERS:User-Agent", rule_text)
+            self.assertNotIn("(?i)", rule_text)
+            self.assertNotIn("capture", rule_text)
             with (output_dir / "coverage.csv").open(encoding="utf-8") as handle:
                 rows = list(csv.DictReader(handle))
-            self.assertEqual(len(rows), 2)
+            self.assertEqual(len(rows), 5)
             self.assertTrue(all(row["grouped_rule"] == "True" for row in rows))
+
+    def test_rule_suggestion_skips_fallback_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            records = [
+                {
+                    "category": "XSS", "group_id": 85, "group_name": "XSS", "encoding": "NONE",
+                    "normalized_payload": "<svg onload=alert(1)>", "final_verdict": "BYPASS_CONFIRMED",
+                    "payload_path": "XSS/1.json", "variant": "ARGS", "zone": "ARGS",
+                },
+                {
+                    "category": "UWA", "group_id": 86, "group_name": "UWA", "encoding": "NONE",
+                    "normalized_payload": "wbc-123abc=opaque-test-value", "final_verdict": "BYPASS_CONFIRMED",
+                    "payload_path": "UWA/1.json", "variant": "COOKIE", "zone": "COOKIE",
+                },
+            ]
+            checked = root / "checked.jsonl"
+            write_jsonl(checked, records)
+            output_dir = root / "rules"
+            summary = suggest_rules(checked, output_dir, 990000)
+            self.assertEqual(summary["covered_variants"], 1)
+            self.assertEqual(summary["skipped_variants"], 1)
+            rule_text = (output_dir / "candidate-rules.conf").read_text(encoding="utf-8")
+            self.assertNotIn("wbc-", rule_text)
+            self.assertNotIn("narrow_fallback", rule_text)
+            with (output_dir / "skipped.csv").open(encoding="utf-8") as handle:
+                skipped = list(csv.DictReader(handle))
+            self.assertEqual(skipped[0]["reason"], "NO_RECOGNIZED_PRIMITIVE")
+
+    def test_lfi_rule_uses_portable_backslash_escape(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            record = {
+                "category": "LFI", "group_id": 31, "group_name": "LFI", "encoding": "NONE",
+                "normalized_payload": "../../etc/passwd", "final_verdict": "BYPASS_CONFIRMED",
+                "payload_path": "LFI/1.json", "variant": "ARGS", "zone": "ARGS",
+            }
+            checked = root / "checked.jsonl"
+            write_jsonl(checked, [record])
+            output_dir = root / "rules"
+            suggest_rules(checked, output_dir, 990000)
+            rule_text = (output_dir / "candidate-rules.conf").read_text(encoding="utf-8")
+            self.assertIn(r"(?:/|\x5c)", rule_text)
+            self.assertNotIn(r"[/\\]", rule_text)
 
     def test_validate_fix_statuses(self) -> None:
         self.assertEqual(_fix_status({"final_verdict": "BLOCKED_BY_WAF"}), "FIXED")
