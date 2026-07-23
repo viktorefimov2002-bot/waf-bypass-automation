@@ -20,46 +20,33 @@ TARGETS = {
 
 SIGNATURES: dict[str, list[tuple[str, str]]] = {
     "xss": [
-        ("xss_event_handler", r"(?i)<[^>]{0,256}\bon[a-z]{2,32}\s*="),
-        ("xss_javascript_scheme", r"(?i)java[\s\x00-\x20]*script\s*:"),
-        ("xss_scriptable_tag", r"(?i)<\s*(?:script|svg|img|iframe|object|embed|audio|video|math|form|input)\b"),
-        ("xss_execution_sink", r"(?i)(?:alert|prompt|confirm|eval|settimeout|setinterval|import)\s*(?:\(|`)"),
+        ("xss_event_handler", r"<[^>]{0,256}\bon[a-z]{2,32}\s*="),
+        ("xss_javascript_scheme", r"java[\s\x00-\x20]*script\s*:"),
+        ("xss_scriptable_tag", r"<\s*(?:script|svg|img|iframe|object|embed|audio|video|math|form|input)\b"),
+        ("xss_execution_sink", r"(?:alert|prompt|confirm|eval|settimeout|setinterval|import)\s*(?:\(|`)"),
     ],
     "sqli": [
-        ("sqli_union_select", r"(?i)\bunion\b.{0,64}\bselect\b"),
-        ("sqli_select_from", r"(?i)\bselect\b.{0,96}\bfrom\b"),
-        ("sqli_boolean", r"(?i)(?:\bor\b|\band\b)\s+['0-9][^\r\n]{0,32}(?:=|like)"),
+        ("sqli_union_select", r"\bunion\b[\s\S]{0,64}\bselect\b"),
+        ("sqli_select_from", r"\bselect\b[\s\S]{0,96}\bfrom\b"),
+        ("sqli_boolean", r"(?:\bor\b|\band\b)\s+['0-9][^\r\n]{0,32}(?:=|like)"),
     ],
     "command": [
-        ("command_separator", r"(?i)(?:[;&|`]|\$\()\s*(?:id|whoami|uname|cat|curl|wget|sh|bash|powershell|cmd)\b"),
-        ("command_substitution", r"(?i)\$\([^\r\n)]{1,256}\)"),
+        ("command_separator", r"(?:[;&|`]|\$\()\s*(?:id|whoami|uname|cat|curl|wget|sh|bash|powershell|cmd)\b"),
+        ("command_substitution", r"\$\([^\r\n)]{1,256}\)"),
     ],
     "lfi": [
-        ("path_traversal", r"(?i)(?:\.\.[/\\]){1,}"),
-        ("sensitive_local_file", r"(?i)(?:/etc/passwd|/proc/self|windows[/\\]win\.ini)"),
+        ("path_traversal", r"(?:\.\.(?:/|\x5c)){1,}"),
+        ("sensitive_local_file", r"(?:/etc/passwd|/proc/self|windows(?:/|\x5c)win\.ini)"),
     ],
     "ssrf": [
-        ("internal_url", r"(?i)\b(?:https?|gopher|file|dict|ftp)://(?:localhost|127\.|169\.254\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)"),
-        ("non_http_scheme", r"(?i)\b(?:gopher|file|dict)://"),
+        ("internal_url", r"\b(?:https?|gopher|file|dict|ftp)://(?:localhost|127\.|169\.254\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)"),
+        ("non_http_scheme", r"\b(?:gopher|file|dict)://"),
     ],
-    "nosqli": [("nosql_operator", r"(?i)\$(?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b")],
-    "ldap": [("ldap_filter_injection", r"(?i)(?:\|\(|&\(|\)\(|\*\)\(|\(objectclass\s*=)")],
-    "ssti": [("template_expression", r"(?s)(?:\{\{.{1,256}\}\}|\$\{.{1,256}\}|<%.{1,256}%>)")],
-    "ssi": [("ssi_directive", r"(?i)<!--\s*#(?:exec|include|echo|config|set)\b")],
-    "redirect": [("redirect_parameter", r"(?i)(?:redirect|redir|return|returnurl|next|continue|url)\s*=\s*(?:https?:)?//")],
-}
-
-FAMILY_FALLBACKS = {
-    "xss": r"(?i)(?:<[^>]{0,512}(?:script|on[a-z]{2,32}\s*=)|java[\s\x00-\x20]*script\s*:)",
-    "sqli": r"(?i)(?:\b(?:select|union|insert|update|delete|drop|sleep|benchmark)\b|(?:--|/\*|\#))",
-    "command": r"(?i)(?:[;&|`]|\$\().{0,64}\b(?:id|whoami|uname|cat|curl|wget|sh|bash|powershell|cmd)\b",
-    "lfi": r"(?i)(?:(?:\.\.[/\\]){1,}|/etc/passwd|/proc/self|windows[/\\]win\.ini)",
-    "ssrf": r"(?i)\b(?:https?|gopher|file|dict|ftp)://",
-    "nosqli": r"(?i)\$(?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b",
-    "ldap": r"(?i)(?:\|\(|&\(|\)\(|\*\)\(|\(objectclass\s*=)",
-    "ssti": r"(?s)(?:\{\{.{1,512}\}\}|\$\{.{1,512}\}|<%.{1,512}%>)",
-    "ssi": r"(?i)<!--\s*#(?:exec|include|echo|config|set)\b",
-    "redirect": r"(?i)(?:redirect|redir|return|returnurl|next|continue|url).{0,32}(?:https?:)?//",
+    "nosqli": [("nosql_operator", r"\$(?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b")],
+    "ldap": [("ldap_filter_injection", r"(?:\|\(|&\(|\)\(|\*\)\(|\(objectclass\s*=)")],
+    "ssti": [("template_expression", r"(?:\{\{[\s\S]{1,256}\}\}|\$\{[\s\S]{1,256}\}|<%[\s\S]{1,256}%>)")],
+    "ssi": [("ssi_directive", r"<!--\s*#(?:exec|include|echo|config|set)\b")],
+    "redirect": [("redirect_parameter", r"(?:redirect|redir|return|returnurl|next|continue|url)\s*=\s*(?:https?:)?//")],
 }
 
 
@@ -78,20 +65,13 @@ def _family(record: dict[str, Any]) -> str:
     return "generic"
 
 
-def _fallback_pattern(value: str) -> str:
-    compact = re.sub(r"\s+", " ", value.strip().lower())[:96] or "__empty_payload__"
-    return "(?i)" + re.escape(compact).replace(r"\ ", r"\s+").replace('"', r"\x22")
-
-
-def _select_signature(record: dict[str, Any]) -> tuple[str, str, str]:
+def _select_signature(record: dict[str, Any]) -> tuple[str, str, str] | None:
     family = _family(record)
-    payload = str(record.get("normalized_payload") or record.get("raw_payload") or "")
+    payload = str(record.get("normalized_payload") or record.get("raw_payload") or "").lower()
     for primitive, pattern in SIGNATURES.get(family, []):
         if re.search(pattern, payload):
             return family, primitive, pattern
-    if family in FAMILY_FALLBACKS:
-        return family, f"{family}_family_fallback", FAMILY_FALLBACKS[family]
-    return family, "narrow_fallback", _fallback_pattern(payload)
+    return None
 
 
 def _transforms(encoding: str, family: str) -> tuple[str, ...]:
@@ -103,49 +83,79 @@ def _transforms(encoding: str, family: str) -> tuple[str, ...]:
     return tuple(dict.fromkeys(result))
 
 
+def _deduplicate_targets(targets: set[str]) -> list[str]:
+    if "REQUEST_HEADERS" in targets:
+        targets.discard("REQUEST_HEADERS:Referer")
+        targets.discard("REQUEST_HEADERS:User-Agent")
+    return sorted(targets)
+
+
+def _validate_pattern(pattern: str) -> None:
+    if "(?i)" in pattern or "(?s)" in pattern:
+        raise ValueError(f"Inline regex flags are not allowed: {pattern}")
+    if "[/\\\\]" in pattern or "[\\\\/]" in pattern:
+        raise ValueError(f"Ambiguous slash/backslash character class is not allowed: {pattern}")
+    re.compile(pattern)
+
+
 def _render_rule(rule: dict[str, Any]) -> str:
     actions = [
-        f"id:{rule['rule_id']}", "phase:2", "deny", "capture", *rule["transforms"],
+        f"id:{rule['rule_id']}", "phase:2", "deny", *rule["transforms"],
         f"msg:'Candidate coverage for confirmed waf-bypass: {rule['primitive']}'",
         "tag:'waf-bypass-candidate'", "severity:'CRITICAL'", "setvar:tx.anomaly_score=+5",
     ]
-    warning = "# REVIEW REQUIRED: validate syntax, coverage and false positives before production.\n"
-    if rule["primitive"] == "narrow_fallback":
-        warning += "# NARROW FALLBACK: generalize manually where possible.\n"
-    elif rule["primitive"].endswith("_family_fallback"):
-        warning += "# BROAD FAMILY FALLBACK: tune against benign traffic.\n"
     action_lines = ",\\\n    ".join(actions)
     return (
         f"# Covers {rule['coverage_count']} confirmed bypass variant(s); "
         f"targets={','.join(rule['targets'])}; encodings={','.join(rule['encodings'])}.\n"
-        f"{warning}SecRule {rule['target']} \"@rx {rule['pattern']}\" \\\n"
+        "# REVIEW REQUIRED: validate converter compatibility, coverage and false positives before production.\n"
+        f"SecRule {rule['target']} \"@rx {rule['pattern']}\" \\\n"
         f"    \"{action_lines}\"\n"
     )
 
 
+def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str, Any]:
-    records = [
-        record for record in read_jsonl(input_path)
-        if record.get("final_verdict") in {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
-    ]
+    records = [record for record in read_jsonl(input_path) if record.get("final_verdict") in {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}]
     if not records:
         raise ValueError("No confirmed bypass records; run verify first")
 
     clusters: dict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
     signatures: dict[str, tuple[str, str, str]] = {}
+    skipped_rows: list[dict[str, Any]] = []
+
     for record in records:
-        family, primitive, pattern = _select_signature(record)
+        signature = _select_signature(record)
+        if signature is None:
+            skipped_rows.append({
+                "stable_key": stable_key(record), "payload_path": record.get("payload_path"),
+                "variant": record.get("variant"), "group_id": record.get("group_id"),
+                "category": record.get("category"), "zone": record.get("zone"),
+                "encoding": record.get("encoding"), "reason": "NO_RECOGNIZED_PRIMITIVE",
+            })
+            continue
+        family, primitive, pattern = signature
+        _validate_pattern(pattern)
         transforms = _transforms(str(record.get("encoding", "NONE")), family)
         signature_key = f"{family}|{primitive}|{pattern}"
         signatures[signature_key] = (family, primitive, pattern)
         clusters[(record.get("group_id"), record.get("group_name"), signature_key, transforms)].append(record)
+
+    if not clusters:
+        raise ValueError("Confirmed bypasses were found, but none matched a supported exploit primitive")
 
     rules: list[dict[str, Any]] = []
     coverage_rows: list[dict[str, Any]] = []
     for offset, (key, covered) in enumerate(sorted(clusters.items(), key=lambda item: tuple(map(str, item[0])))):
         group_id, group_name, signature_key, transforms = key
         family, primitive, pattern = signatures[signature_key]
-        targets = sorted({TARGETS.get(str(record.get("zone")), "REQUEST_URI") for record in covered})
+        targets = _deduplicate_targets({TARGETS.get(str(record.get("zone")), "REQUEST_URI") for record in covered})
         encodings = sorted({str(record.get("encoding", "NONE")) for record in covered})
         target = "|".join(targets)
         rule = {
@@ -160,33 +170,43 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             coverage_rows.append({
                 "stable_key": stable_key(record), "payload_path": record["payload_path"],
                 "variant": record["variant"], "group_id": group_id, "rule_id": rule["rule_id"],
-                "primitive": primitive, "zone": record.get("zone"),
-                "encoding": record.get("encoding"), "rule_target": target,
-                "grouped_rule": len(covered) > 1,
-                "fallback": primitive == "narrow_fallback",
+                "primitive": primitive, "zone": record.get("zone"), "encoding": record.get("encoding"),
+                "rule_target": target, "grouped_rule": len(covered) > 1,
             })
 
     output_dir.mkdir(parents=True, exist_ok=True)
     conf_path = output_dir / "candidate-rules.conf"
     conf_path.write_text(
-        "# Auto-generated candidate SecLang rules. DO NOT auto-load.\n\n"
+        "# Auto-generated candidate SecLang rules. DO NOT auto-load.\n"
+        "# Only recognized exploit primitives are emitted; fallback payload rules are skipped.\n\n"
         + "\n".join(_render_rule(rule) for rule in rules), encoding="utf-8"
     )
     coverage_path = output_dir / "coverage.csv"
-    with coverage_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(coverage_rows[0]))
-        writer.writeheader(); writer.writerows(coverage_rows)
+    _write_csv(coverage_path, coverage_rows, ["stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive", "zone", "encoding", "rule_target", "grouped_rule"])
+    skipped_path = output_dir / "skipped.csv"
+    _write_csv(skipped_path, skipped_rows, ["stable_key", "payload_path", "variant", "group_id", "category", "zone", "encoding", "reason"])
+
     manifest_path = output_dir / "manifest.json"
     grouped_rules = sum(rule["coverage_count"] > 1 for rule in rules)
+    covered_variants = len(coverage_rows)
     write_json(manifest_path, {
         "source": str(input_path), "confirmed_bypass_variants": len(records),
+        "covered_variants": covered_variants, "skipped_variants": len(skipped_rows),
         "candidate_rules": len(rules), "grouped_rules": grouped_rules,
-        "max_variants_per_rule": max(rule["coverage_count"] for rule in rules), "rules": rules,
+        "max_variants_per_rule": max(rule["coverage_count"] for rule in rules),
+        "generation_policy": {
+            "recognized_primitives_only": True, "family_fallbacks": False,
+            "narrow_fallbacks": False, "inline_regex_flags": False,
+            "deduplicate_generic_headers": True,
+        },
+        "rules": rules,
     })
-    if len(coverage_rows) != len(records):
-        raise RuntimeError("Coverage matrix does not include every confirmed bypass variant")
+    if covered_variants + len(skipped_rows) != len(records):
+        raise RuntimeError("Each confirmed bypass must be covered or explicitly skipped")
     return {
-        "confirmed_bypass_variants": len(records), "candidate_rules": len(rules),
+        "confirmed_bypass_variants": len(records), "covered_variants": covered_variants,
+        "skipped_variants": len(skipped_rows), "candidate_rules": len(rules),
         "grouped_rules": grouped_rules, "max_variants_per_rule": max(rule["coverage_count"] for rule in rules),
-        "coverage": str(coverage_path), "rules": str(conf_path), "manifest": str(manifest_path),
+        "coverage": str(coverage_path), "skipped": str(skipped_path),
+        "rules": str(conf_path), "manifest": str(manifest_path),
     }
