@@ -22,21 +22,24 @@ SEPARATE_TARGET_ENCODINGS = {"BASE64", "UTF-16"}
 DYNAMIC_HEADER_RE = re.compile(r"^(?:wbh|wbc)-[0-9a-f]+$", re.IGNORECASE)
 HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 
+# Patterns intentionally avoid control-character escapes such as \r and \n.
+# The downstream legacy SecLang lexer can treat those escapes as literal line
+# breaks inside a quoted operator and report an unterminated string.
 SIGNATURES: dict[str, list[tuple[str, str]]] = {
     "xss": [
         ("xss_event_handler", r"<[^>]{0,256}\bon[a-z]{2,32}\s*="),
         ("xss_javascript_scheme", r"java[\s\x00-\x20]*script\s*:"),
         ("xss_scriptable_tag", r"<\s*(?:script|svg|img|iframe|object|embed|audio|video|math|form|input)\b"),
-        ("xss_execution_sink", r"(?:alert|prompt|confirm|eval|settimeout|setinterval|import)\s*(?:\(|`)"),
+        ("xss_execution_sink", r"(?:alert|prompt|confirm|eval|settimeout|setinterval|import)\s*(?:[(]|`)"),
     ],
     "sqli": [
         ("sqli_union_select", r"\bunion\b[\s\S]{0,64}\bselect\b"),
         ("sqli_select_from", r"\bselect\b[\s\S]{0,96}\bfrom\b"),
-        ("sqli_boolean", r"(?:\bor\b|\band\b)\s+['0-9][^\r\n]{0,32}(?:=|like)"),
+        ("sqli_boolean", r"(?:\bor\b|\band\b)\s+['0-9][^=]{0,32}(?:=|like)"),
     ],
     "command": [
-        ("command_separator", r"(?:[;&|`]|\$\()\s*(?:id|whoami|uname|cat|curl|wget|sh|bash|powershell|cmd)\b"),
-        ("command_substitution", r"\$\([^\r\n)]{1,256}\)"),
+        ("command_separator", r"(?:[;&|`]|[$][(])\s*(?:id|whoami|uname|cat|curl|wget|sh|bash|powershell|cmd)\b"),
+        ("command_substitution", r"[$][(][^)]{1,256}[)]"),
     ],
     "lfi": [
         ("path_traversal", r"(?:\.\.(?:/|\x5c)){1,}"),
@@ -46,9 +49,9 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("internal_url", r"\b(?:https?|gopher|file|dict|ftp)://(?:localhost|127\.|169\.254\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)"),
         ("non_http_scheme", r"\b(?:gopher|file|dict)://"),
     ],
-    "nosqli": [("nosql_operator", r"\$(?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b")],
-    "ldap": [("ldap_filter_injection", r"(?:\|\(|&\(|\)\(|\*\)\(|\(objectclass\s*=)")],
-    "ssti": [("template_expression", r"(?:\{\{[\s\S]{1,256}\}\}|\$\{[\s\S]{1,256}\}|<%[\s\S]{1,256}%>)")],
+    "nosqli": [("nosql_operator", r"[$](?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b")],
+    "ldap": [("ldap_filter_injection", r"(?:\|[(]|&[(]|[)][(]|[*][)][(]|[(]objectclass\s*=)")],
+    "ssti": [("template_expression", r"(?:\{\{[\s\S]{1,256}\}\}|[$][{][\s\S]{1,256}\}|<%[\s\S]{1,256}%>)")],
     "ssi": [("ssi_directive", r"<!--\s*#(?:exec|include|echo|config|set)\b")],
     "redirect": [("redirect_parameter", r"(?:redirect|redir|return|returnurl|next|continue|url)\s*=\s*(?:https?:)?//")],
 }
@@ -134,6 +137,11 @@ def _validate_pattern(pattern: str) -> None:
         raise ValueError(f"Inline regex flags are not allowed: {pattern}")
     if "[/\\\\]" in pattern or "[\\\\/]" in pattern:
         raise ValueError(f"Ambiguous slash/backslash character class is not allowed: {pattern}")
+    for escape in (r"\r", r"\n", r"\t"):
+        if escape in pattern:
+            raise ValueError(f"Legacy SecLang control escape is not allowed: {pattern}")
+    if '"' in pattern:
+        raise ValueError(f"Double quotes are not allowed in generated regex: {pattern}")
     re.compile(pattern)
 
 
@@ -240,7 +248,8 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
     conf_path.write_text(
         "# Auto-generated candidate SecLang rules. DO NOT auto-load.\n"
         "# Only recognized exploit primitives are emitted; fallback payload rules are skipped.\n"
-        "# BASE64 and UTF-16 candidates are separated by request target.\n\n"
+        "# BASE64 and UTF-16 candidates are separated by request target.\n"
+        "# Regex output avoids control escapes rejected by the legacy SecLang converter.\n\n"
         + "\n".join(_render_rule(rule) for rule in rules), encoding="utf-8"
     )
     coverage_path = output_dir / "coverage.csv"
@@ -264,6 +273,8 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             "preserve_stable_named_headers": True,
             "skip_dynamic_test_headers": True,
             "supported_encodings": sorted(SUPPORTED_ENCODINGS),
+            "legacy_seclang_safe_regex": True,
+            "control_character_escapes": False,
         },
         "rules": rules,
     })
