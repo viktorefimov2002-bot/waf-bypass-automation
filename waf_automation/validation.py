@@ -12,11 +12,14 @@ from .common import read_jsonl, stable_key, write_jsonl
 from .recheck import recheck_records
 
 
+CONFIRMED_BYPASS_VERDICTS = {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
+
+
 def _fix_status(after: dict[str, Any]) -> str:
     verdict = after.get("final_verdict")
     if verdict == "BLOCKED_BY_WAF":
         return "FIXED"
-    if verdict in {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}:
+    if verdict in CONFIRMED_BYPASS_VERDICTS:
         return "STILL_BYPASSED"
     if verdict == "CHECK_ERROR":
         return "ERROR"
@@ -33,7 +36,8 @@ def _load_rule_metadata(coverage_path: Path | None, manifest_path: Path | None) 
         with coverage_path.open(encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):
                 key = str(row.get("stable_key") or "")
-                if key:
+                rule_id = str(row.get("rule_id") or "")
+                if key and rule_id:
                     coverage_by_key[key] = row
 
     if manifest_path:
@@ -44,6 +48,27 @@ def _load_rule_metadata(coverage_path: Path | None, manifest_path: Path | None) 
             rules_by_id[str(rule.get("rule_id"))] = rule
 
     return coverage_by_key, rules_by_id
+
+
+def _prepare_replay_input(
+    before_path: Path,
+    output_jsonl: Path,
+    coverage_by_key: dict[str, dict[str, Any]],
+    coverage_path: Path | None,
+) -> tuple[Path, dict[str, dict[str, Any]], int]:
+    confirmed = {
+        stable_key(record): record
+        for record in read_jsonl(before_path)
+        if record.get("final_verdict") in CONFIRMED_BYPASS_VERDICTS
+    }
+    if not coverage_path:
+        return before_path, confirmed, 0
+
+    selected = [record for key, record in confirmed.items() if key in coverage_by_key]
+    replay_input_path = output_jsonl.with_suffix(".eligible.jsonl")
+    write_jsonl(replay_input_path, selected)
+    skipped_without_candidate_rule = len(confirmed) - len(selected)
+    return replay_input_path, {stable_key(record): record for record in selected}, skipped_without_candidate_rule
 
 
 def validate_fixes(
@@ -61,10 +86,13 @@ def validate_fixes(
     manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     coverage_by_key, rules_by_id = _load_rule_metadata(coverage_path, manifest_path)
+    replay_input_path, before, skipped_without_candidate_rule = _prepare_replay_input(
+        before_path, output_jsonl, coverage_by_key, coverage_path
+    )
 
     replay_path = output_jsonl.with_suffix(".replayed.jsonl")
     recheck_records(
-        before_path,
+        replay_input_path,
         replay_path,
         group_id=group_id,
         execute=execute,
@@ -75,11 +103,6 @@ def validate_fixes(
         only_confirmed_bypasses=True,
     )
 
-    before = {
-        stable_key(record): record
-        for record in read_jsonl(before_path)
-        if record.get("final_verdict") in {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
-    }
     after = {stable_key(record): record for record in read_jsonl(replay_path)}
     rows: list[dict[str, Any]] = []
     for key in sorted(after):
@@ -135,6 +158,8 @@ def validate_fixes(
     mapping_counts = Counter(row["rule_mapping_status"] for row in rows)
     return {
         "records": len(rows),
+        "eligible_confirmed_bypasses": len(before),
+        "skipped_without_candidate_rule": skipped_without_candidate_rule,
         "fixed": counts["FIXED"],
         "still_bypassed": counts["STILL_BYPASSED"],
         "needs_review": counts["NEEDS_REVIEW"],
@@ -145,6 +170,7 @@ def validate_fixes(
         "output_jsonl": str(output_jsonl),
         "output_xlsx": str(output_xlsx),
         "replayed_jsonl": str(replay_path),
+        "eligible_jsonl": str(replay_input_path) if coverage_path else None,
         "coverage": str(coverage_path) if coverage_path else None,
         "manifest": str(manifest_path) if manifest_path else None,
     }
