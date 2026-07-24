@@ -1,6 +1,28 @@
 from __future__ import annotations
 
+import re
 from typing import Final
+
+
+# Wirefilter does not interpret PCRE-style textual \uXXXX escapes inside regex
+# character classes. Build the class from literal Unicode format characters so
+# both Python classification and the generated data-plane regex see the same
+# code points without an escaped range.
+_BIDI_FORMAT_CHARS: Final[str] = "".join(
+    chr(codepoint)
+    for codepoint in (
+        0x202A,
+        0x202B,
+        0x202C,
+        0x202D,
+        0x202E,
+        0x2066,
+        0x2067,
+        0x2068,
+        0x2069,
+    )
+)
+_BIDI_SCRIPT_PATTERN: Final[str] = rf"<[{re.escape(_BIDI_FORMAT_CHARS)}]*script\b"
 
 
 EXTRA_SIGNATURES: Final[dict[str, list[tuple[str, str]]]] = {
@@ -35,6 +57,10 @@ EXTRA_SIGNATURES: Final[dict[str, list[tuple[str, str]]]] = {
         ),
     ],
     "xss": [
+        (
+            "xss_bidi_script_tag",
+            _BIDI_SCRIPT_PATTERN,
+        ),
         (
             "xss_fragmented_javascript_scheme",
             r"j[\s\x00-\x20]*a[\s\x00-\x20]*v[\s\x00-\x20]*a[\s\x00-\x20]*s[\s\x00-\x20]*c[\s\x00-\x20]*r[\s\x00-\x20]*i[\s\x00-\x20]*p[\s\x00-\x20]*t\s*:",
