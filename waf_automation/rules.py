@@ -26,12 +26,21 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("xss_event_handler", r"<[^>]{0,256}\bon[a-z]{2,32}\s*="),
         ("xss_fragmented_event_handler", r"o(?:<[^>]{0,32}>)*n(?:<[^>]{0,32}>)*[a-z]{3,32}\s*="),
         ("xss_javascript_scheme", r"java[\s\x00-\x20]*script\s*:"),
+        ("xss_javascript_href", r"<a[^>]{0,256}\bhref\s*=\s*[^>]{0,96}java[\s\x00-\x20]*script\s*:"),
         ("xss_scriptable_tag", r"<\s*(?:script|svg|img|iframe|object|embed|audio|video|math|form|input)\b"),
+        ("xss_namespaced_script", r"<[a-z][a-z0-9_-]*:script\b"),
+        ("xss_bidi_script_tag", r"<[\u202a-\u202e\u2066-\u2069]*script\b"),
         ("xss_execution_sink", r"(?:alert|prompt|confirm|eval|settimeout|setinterval|import)\s*(?:[(]|`)"),
+        ("xss_call_apply", r"\b(?:alert|confirm|prompt)\s*[.]\s*(?:call|apply)\s*[(]"),
+        ("xss_array_callback", r"\[[^]]{1,96}\]\s*[.]\s*(?:map|find|sort|with)\s*[(][^)]{0,96}(?:alert|confirm|prompt)"),
+        ("xss_function_tag", r"\b(?:function|constructor)\s*`"),
         ("xss_bracket_execution", r"\b(?:window|self|top)\s*\[[^]]{1,96}\]\s*[(]"),
+        ("xss_location_assignment", r"\blocation\s*=\s*[a-z_][a-z0-9_]*\s*;"),
+        ("xss_css_javascript_url", r"background-image\s*:\s*url\s*[(][^)]{0,256}javascript\s*:"),
     ],
     "sqli": [
         ("sqli_zero_width_union_select", rf"u{_ZW}n{_ZW}i{_ZW}o{_ZW}n[\s\S]{{0,64}}s{_ZW}e{_ZW}l{_ZW}e{_ZW}c{_ZW}t"),
+        ("sqli_fragmented_union_select", r"u(?:n|[\\][\"'][,]?[\\][\"']n)[\s\S]{0,24}ion[\s\S]{0,32}s(?:e|[\\][\"'][,]?[\\][\"']e)[\s\S]{0,24}lect"),
         ("sqli_union_select", r"\bunion\b[\s\S]{0,64}\bselect\b"),
         ("sqli_union_select_comments", r"\bunion(?:\s|/[*][\s\S]{0,32}[*]/){1,8}select\b"),
         ("sqli_select_from", r"\bselect\b[\s\S]{0,96}\bfrom\b"),
@@ -39,9 +48,11 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("sqli_time_function", r"\b(?:sleep|benchmark|pg_sleep|waitfor)\s*[(]"),
     ],
     "command": [
-        ("jndi_lookup", r"[$][{][\s\S]{0,192}j[\s\S]{0,48}n[\s\S]{0,48}d[\s\S]{0,48}i[\s\S]{0,48}:"),
+        ("jndi_lookup", r"[$][\\]?[{][\s\S]{0,192}j[\s\S]{0,48}n[\s\S]{0,48}d[\s\S]{0,48}i[\s\S]{0,48}:"),
         ("command_separator", r"(?:[;&|`]|[$][(])\s*(?:id|whoami|uname|cat|curl|wget|sh|bash|powershell|cmd)\b"),
         ("command_substitution", r"[$][(][^)]{1,256}[)]"),
+        ("command_obfuscated_cat", r"(?:^|[;&|])[\s\S]{0,96}c[^a-z0-9]{0,4}a[^a-z0-9]{0,4}t[\s\S]{0,96}(?:/etc/passwd|/e[^a-z0-9]{0,4}t[^a-z0-9]{0,4}c)"),
+        ("command_parameter_chain", r"\bcmd\s*=\s*[^\s]{0,128}(?:[+ ]&&[+ ]|[+ ]\|[+ ])(?:ls|cat|id|whoami)\b"),
     ],
     "lfi": [
         ("path_traversal", r"(?:\.\.(?:/|\x5c)){1,}"),
@@ -56,16 +67,25 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
     "ssrf": [
         ("internal_url", r"\b(?:https?|gopher|file|dict|ftp):/{1,3}(?:localhost|127\.|169\.254\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)"),
         ("non_http_scheme", r"\b(?:gopher|file|dict):/{1,3}"),
+        ("remote_non_http_scheme", r"\b(?:sftp|tftp|ldap)://[^/\s:]+(?::[0-9]{1,5})?(?:/|$)"),
+        ("obfuscated_file_uri", r"\bfile\s*:[\s\S]{0,96}/[^?\s]{1,256}(?:passwd|shadow|win\.ini)"),
     ],
     "nosqli": [
         ("nosql_operator", r"[$](?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b"),
         ("nosql_javascript_predicate", r"\bthis\.[a-z_][a-z0-9_]*\.(?:match|test|includes)\s*[(]"),
+        ("nosql_return_predicate", r"(?:^|[;'\/])\s*return\s+[' ]{0,4}==\s*[' ]{0,4}"),
+        ("nosql_duplicate_roles", r"[\"']roles[\"']\s*:[\s\S]{0,128}[\"']roles[\"']\s*:"),
     ],
-    "ldap": [("ldap_filter_injection", r"(?:\|[(]|&[(]|[)][(]|[*][)][(]|[(]objectclass\s*=|[*][)][)]|[*][(][)]|[)][|&][(])")],
+    "ldap": [
+        ("ldap_filter_injection", r"(?:\|[(]|&[(]|[)][(]|[*][)][(]|[(]objectclass\s*=|[*][)][)]|[*][(][)]|[)][|&][(])"),
+        ("xpath_boolean_injection", r"[' ]\s+or\s+[a-z_][a-z0-9_-]*\s*[(][)]\s*=\s*[' ]"),
+    ],
     "ssti": [
         ("template_expression", r"(?:\{\{[\s\S]{1,256}\}\}|[$][{][\s\S]{1,256}\}|<%[\s\S]{1,256}%>)"),
         ("smarty_expression", r"\{[$][a-z_][a-z0-9_.]{0,128}\}"),
         ("spel_expression", r"[#]\{[\s\S]{1,256}\}"),
+        ("thymeleaf_expression", r"[*]\{[\s\S]{1,256}\}"),
+        ("at_expression", r"@[(][\s\S]{1,128}[)]"),
     ],
     "ssi": [("ssi_directive", r"<!--\s*#(?:exec|include|echo|config|set)\b")],
     "redirect": [
@@ -73,6 +93,16 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("redirect_scheme_relative", r"^/{2,3}[a-z0-9.-]+(?:[/:?#]|$)"),
         ("redirect_userinfo", r"https?://[^/\s@]{1,128}@"),
         ("redirect_at_host", r"^@[a-z0-9.-]+(?:[/:?#]|$)"),
+        ("redirect_ipv6_literal", r"https?://\[(?:::ffff:)?[0-9a-f:.]+\]"),
+        ("redirect_crlf_location", r"[\x0d\x0a]+[0-9]*location\s*:\s*https?://"),
+    ],
+    "graphql": [
+        ("graphql_introspection", r"(?:__schema\b|__type\s*[(]|fragment\s+fulltype\s+on\s+__type)"),
+    ],
+    "exposure": [
+        ("exposed_vcs", r"^/[.]git(?:/|$)"),
+        ("backup_archive", r"^/(?:[.]/)?(?:backup(?:/|[.])|backup/[^\s]{0,128}|[^/\s]*(?:backup|db)[^/\s]*[.](?:zip|gz|tgz|tar))(?:$|[?#])"),
+        ("webshell_php_path", r"/(?:wso|do)[.]php(?:$|[;#.\x0a\x0d])"),
     ],
 }
 
@@ -83,6 +113,7 @@ def _family(record: dict[str, Any]) -> str:
         "XSS": "xss", "SQLI": "sqli", "CM": "command", "RCE": "command",
         "LFI": "lfi", "RFI": "rfi", "SSRF": "ssrf", "NOSQLI": "nosqli",
         "LDAP": "ldap", "SSTI": "ssti", "SSI": "ssi", "OR": "redirect",
+        "GRAPHQL": "graphql", "UWA": "exposure",
     }.get(category, "generic")
 
 
@@ -256,16 +287,12 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
         + "\n".join(_render_rule(rule) for rule in rules), encoding="utf-8")
 
     coverage_fields = ["stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive", "zone", "encoding", "rule_target", "grouped_rule", "generic_header_target", "normalized_payload"]
-    coverage_path = output_dir / "coverage.csv"
-    _write_csv(coverage_path, coverage_rows, coverage_fields)
-    coverage_jsonl_path = output_dir / "coverage.jsonl"
-    write_jsonl(coverage_jsonl_path, coverage_rows)
+    coverage_path = output_dir / "coverage.csv"; _write_csv(coverage_path, coverage_rows, coverage_fields)
+    coverage_jsonl_path = output_dir / "coverage.jsonl"; write_jsonl(coverage_jsonl_path, coverage_rows)
 
     skipped_fields = ["stable_key", "payload_path", "variant", "group_id", "category", "family", "zone", "encoding", "payload_component", "payload_name", "normalization_complete", "normalization_steps", "reason", "detail", "invisible_codepoints", "normalized_payload_preview"]
-    skipped_path = output_dir / "skipped.csv"
-    _write_csv(skipped_path, skipped_rows, skipped_fields)
-    skipped_jsonl_path = output_dir / "skipped.jsonl"
-    write_jsonl(skipped_jsonl_path, skipped_rows)
+    skipped_path = output_dir / "skipped.csv"; _write_csv(skipped_path, skipped_rows, skipped_fields)
+    skipped_jsonl_path = output_dir / "skipped.jsonl"; write_jsonl(skipped_jsonl_path, skipped_rows)
 
     grouped_rules = sum(rule["coverage_count"] > 1 for rule in rules)
     covered_variants = len(coverage_rows)
@@ -282,6 +309,7 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             "supported_encodings": sorted(SUPPORTED_ENCODINGS), "legacy_seclang_safe_regex": True,
             "iterative_transport_decoding": True, "args_name_targeting": True,
             "zero_width_sql_patterns": True, "csv_and_jsonl_indexes": True,
+            "skipped_payload_revision": True,
         }, "rules": rules,
     })
     if covered_variants + len(skipped_rows) != len(records): raise RuntimeError("Each confirmed bypass must be covered or explicitly skipped")
