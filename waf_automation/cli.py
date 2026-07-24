@@ -7,6 +7,7 @@ from pathlib import Path
 from .diffing import diff_runs
 from .importer import import_report
 from .recheck import recheck_records
+from .refinement import refine_rules
 from .report import create_compact_report, create_report
 from .rules import suggest_rules
 from .validation import validate_fixes
@@ -80,6 +81,12 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--input", required=True, type=_path)
     command.add_argument("--output-dir", required=True, type=_path)
     command.add_argument("--id-start", required=True, type=int)
+
+    command = subparsers.add_parser("refine-rules", help="Refine candidate rules for STILL_BYPASSED validation results")
+    command.add_argument("--validation", required=True, type=_path, help="fix-validation.jsonl from validate-fix")
+    command.add_argument("--manifest", required=True, type=_path, help="manifest.json used for the failed validation")
+    command.add_argument("--coverage", required=True, type=_path, help="coverage.csv used for the failed validation")
+    command.add_argument("--output-dir", required=True, type=_path)
     return parser
 
 
@@ -127,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         result = diff_runs(args.before, args.after, args.output_jsonl, args.output_xlsx)
     elif args.command == "suggest-rules":
         result = suggest_rules(args.input, args.output_dir, args.id_start)
+    elif args.command == "refine-rules":
+        result = refine_rules(args.validation, args.manifest, args.coverage, args.output_dir)
     else:
         raise AssertionError(args.command)
     print(json.dumps(result, ensure_ascii=False, indent=2))
