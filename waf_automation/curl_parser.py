@@ -13,6 +13,7 @@ STANDARD_HEADERS = {
     "accept", "accept-encoding", "connection", "content-length", "content-type", "host", "user-agent", "referer", "cookie"
 }
 _SAFE_ARGUMENT_NAME_RE = re.compile(r"^[A-Za-z0-9_.~-]{1,64}$")
+_BASE64_QUERY_RE = re.compile(r"^[A-Za-z0-9+/]{8,}={1,2}$")
 
 
 def split_curl(command: str) -> list[str]:
@@ -83,6 +84,10 @@ def extract_payload_details(request: dict[str, Any], zone: str) -> dict[str, Any
         return {"value": value, "component": "REQUEST_URI", "name": None}
     if zone == "ARGS":
         query = str(request["query"] or "")
+        # A trailing '=' or '==' can be Base64 padding rather than an HTTP
+        # name/value separator. Preserve the whole query in that case.
+        if _BASE64_QUERY_RE.fullmatch(query):
+            return {"value": query, "component": "ARG_NAME", "name": None, "raw_query": query}
         # Do not use parse_qsl for scanner payloads: literal &, = and Base64
         # padding can be part of the attack string and must remain intact.
         name, separator, value = query.partition("=")
@@ -142,8 +147,6 @@ def _decode_base64(value: str) -> str | None:
         return None
     padding = "=" * ((4 - len(compact) % 4) % 4)
     try:
-        # Scanner variants can deliberately contain separators such as && inside
-        # a Base64-looking query. validate=False mirrors tolerant WAF decoders.
         decoded_bytes = base64.b64decode(compact + padding, validate=False)
         decoded = decoded_bytes.decode("utf-8")
     except (binascii.Error, UnicodeDecodeError, ValueError):
