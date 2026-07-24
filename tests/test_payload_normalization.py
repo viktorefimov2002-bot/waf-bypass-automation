@@ -28,6 +28,30 @@ class PayloadNormalizationTests(unittest.TestCase):
         self.assertEqual(details["name"], "q")
         self.assertEqual(details["value"], "%3Csvg%20onload%3Dalert%281%29%3E")
 
+    def test_cookie_extracts_value_without_random_name(self) -> None:
+        command = (
+            "curl -H 'Cookie: WBC-2269fa="
+            "Li4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Y2Jvb3QuaW5p' "
+            "https://example.test/"
+        )
+        details = extract_payload_details(extract_request(command), "COOKIE")
+        self.assertEqual(details["component"], "COOKIE_VALUE")
+        self.assertEqual(details["name"], "WBC-2269fa")
+        self.assertEqual(
+            details["value"],
+            "Li4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Y2Jvb3QuaW5p",
+        )
+        result = normalize_payload_details(details["value"], "BASE64")
+        self.assertEqual(result["value"], r"..\..\..\..\..\..\..\..\boot.ini")
+        self.assertEqual(result["steps"], ["base64", "percent"])
+
+    def test_multiple_cookies_normalize_values_without_names(self) -> None:
+        command = "curl -H 'Cookie: session=abc; WBC-deadbe=PHN2ZyBvbmxvYWQ9YWxlcnQoMSk+' https://example.test/"
+        details = extract_payload_details(extract_request(command), "COOKIE")
+        self.assertIsNone(details["name"])
+        self.assertEqual(details["cookie_names"], ["session", "WBC-deadbe"])
+        self.assertEqual(details["value"], "abc\nPHN2ZyBvbmxvYWQ9YWxlcnQoMSk+")
+
     def test_base64_then_percent_decode_ldap(self) -> None:
         raw = "YWRtaW4lMkElMjklMjglMjglN0N1c2VycGFzc3dvcmQlM0QlMkElMjk="
         result = normalize_payload_details(raw, "BASE64")
@@ -86,6 +110,37 @@ class PayloadNormalizationTests(unittest.TestCase):
             self.assertIn("SecRule ARGS_NAMES", rule_text)
             self.assertIn("t:base64DecodeExt", rule_text)
             self.assertGreaterEqual(rule_text.count("t:urlDecodeUni"), 2)
+
+    def test_import_cookie_records_name_and_normalized_value(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            groups = root / "groups.txt"
+            groups.write_text("group\n", encoding="utf-8")
+            taxonomy = root / "taxonomy.json"
+            taxonomy.write_text(json.dumps({
+                "additional_groups": [{"id": 31, "name": "LFI", "source": "local"}],
+                "category_defaults": {"LFI": 31},
+            }), encoding="utf-8")
+            command = (
+                "curl -H 'Cookie: WBC-2269fa="
+                "Li4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Y2Jvb3QuaW5p' "
+                "https://example.test/"
+            )
+            report = root / "report.json"
+            report.write_text(json.dumps({
+                "TARGET": "https://example.test/",
+                "BLOCK-CODE": [403],
+                "BYPASSED": {"LFI/12.json": {"COOKIE:BASE64": "200 RESPONSE CODE"}},
+                "cURL": {"BYPASSED": {"LFI/12.json": {"COOKIE:BASE64": command}}},
+            }), encoding="utf-8")
+            imported_path = root / "imported.jsonl"
+            import_report(report, groups, imported_path, taxonomy, None)
+            record = read_jsonl(imported_path)[0]
+            self.assertEqual(record["payload_name"], "WBC-2269fa")
+            self.assertEqual(record["payload_component"], "COOKIE_VALUE")
+            self.assertEqual(record["normalized_payload"], r"..\..\..\..\..\..\..\..\boot.ini")
+            self.assertEqual(record["normalization_steps"], ["base64", "percent"])
+            self.assertTrue(record["raw_cookie"].startswith("WBC-2269fa="))
 
 
 if __name__ == "__main__":
