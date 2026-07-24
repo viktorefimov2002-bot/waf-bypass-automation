@@ -131,7 +131,7 @@ class ToolTests(unittest.TestCase):
             self.assertTrue(all(len(rule["targets"]) == 1 for rule in manifest["rules"]))
             self.assertEqual(manifest["generation_policy"]["split_targets_for_encodings"], ["BASE64", "UTF-16"])
 
-    def test_stable_named_header_is_preserved_and_dynamic_header_skipped(self) -> None:
+    def test_stable_and_dynamic_headers_are_covered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             base = {
@@ -147,14 +147,16 @@ class ToolTests(unittest.TestCase):
             write_jsonl(checked, records)
             output_dir = root / "rules"
             summary = suggest_rules(checked, output_dir, 990000)
-            self.assertEqual(summary["covered_variants"], 1)
-            self.assertEqual(summary["skipped_variants"], 1)
+            self.assertEqual(summary["covered_variants"], 2)
+            self.assertEqual(summary["skipped_variants"], 0)
+            self.assertEqual(summary["generic_header_rules"], 1)
             rule_text = (output_dir / "candidate-rules.conf").read_text(encoding="utf-8")
             self.assertIn("SecRule REQUEST_HEADERS:X-Api-Key", rule_text)
-            self.assertNotIn("wbh-", rule_text)
-            with (output_dir / "skipped.csv").open(encoding="utf-8") as handle:
-                skipped = list(csv.DictReader(handle))
-            self.assertEqual(skipped[0]["reason"], "DYNAMIC_TEST_HEADER")
+            self.assertIn("SecRule REQUEST_HEADERS", rule_text)
+            self.assertIn("false positives", rule_text)
+            with (output_dir / "coverage.csv").open(encoding="utf-8") as handle:
+                coverage = list(csv.DictReader(handle))
+            self.assertTrue(any(row["generic_header_target"] == "True" for row in coverage))
 
     def test_rule_suggestion_skips_fallback_payloads(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -25,15 +25,10 @@ class LegacySecLangRuleTests(unittest.TestCase):
             root = Path(directory)
             checked = root / "checked.jsonl"
             write_jsonl(checked, [{
-                "category": "CM",
-                "group_id": 37,
-                "group_name": "Внедрение команд ОС",
-                "encoding": "NONE",
-                "normalized_payload": "$(printf test)",
-                "final_verdict": "BYPASS_CONFIRMED",
-                "payload_path": "CM/1.json",
-                "variant": "COOKIE",
-                "zone": "COOKIE",
+                "category": "CM", "group_id": 37, "group_name": "Внедрение команд ОС",
+                "encoding": "NONE", "normalized_payload": "$(printf test)",
+                "final_verdict": "BYPASS_CONFIRMED", "payload_path": "CM/1.json",
+                "variant": "COOKIE", "zone": "COOKIE",
             }])
             output_dir = root / "rules"
             suggest_rules(checked, output_dir, 990000)
@@ -46,7 +41,7 @@ class LegacySecLangRuleTests(unittest.TestCase):
 
             manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
             self.assertTrue(manifest["generation_policy"]["legacy_seclang_safe_regex"])
-            self.assertFalse(manifest["generation_policy"]["control_character_escapes"])
+            self.assertEqual(manifest["generation_policy"]["dynamic_test_headers_target"], "REQUEST_HEADERS")
 
 
 if __name__ == "__main__":
