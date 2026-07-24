@@ -11,7 +11,7 @@ EXTRA_SIGNATURES: Final[dict[str, list[tuple[str, str]]]] = {
         ),
         (
             "sqli_fragmented_union_select",
-            r"u(?:n|\x5c[\x22'][,]?\x5c[\x22']n)[\s\S]{0,24}ion[\s\S]{0,32}s(?:e|\x5c[\x22'][,]?\x5c[\x22']e)[\s\S]{0,24}lect",
+            r"u\x5c[\x22'][,]?\x5c[\x22']n[\s\S]{0,24}ion[\s\S]{0,32}s\x5c[\x22'][,]?\x5c[\x22']e[\s\S]{0,24}lect",
         ),
     ],
     "command": [
