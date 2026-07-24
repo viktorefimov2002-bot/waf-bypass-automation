@@ -6,11 +6,12 @@ from waf_automation.rules import SIGNATURES, _select_signature, _validate_patter
 
 
 class LegacyRegexCompatibilityTests(unittest.TestCase):
-    def test_no_backslash_only_character_classes_are_generated(self) -> None:
+    def test_generated_patterns_avoid_known_legacy_loader_traps(self) -> None:
         for family, signatures in SIGNATURES.items():
             for primitive, pattern in signatures:
                 with self.subTest(family=family, primitive=primitive):
                     self.assertNotIn(r"[\\]", pattern)
+                    self.assertNotRegex(pattern, r"\\u[0-9a-fA-F]{4,8}")
                     _validate_pattern(pattern)
 
     def test_escaped_quoted_sql_uses_hex_backslash(self) -> None:
@@ -41,6 +42,15 @@ class LegacyRegexCompatibilityTests(unittest.TestCase):
         self.assertEqual(css[1], "xss_css_escaped_javascript")
         self.assertNotIn(r"[\\]", jndi[2])
         self.assertNotIn(r"[\\]", css[2])
+
+    def test_bidi_pattern_uses_literal_codepoints_not_unicode_escapes(self) -> None:
+        payload = "<" + chr(0x202E) + "script>alert(1)</script>"
+        signature = _select_signature({"category": "XSS", "normalized_payload": payload})
+        self.assertIsNotNone(signature)
+        assert signature is not None
+        self.assertEqual(signature[1], "xss_bidi_script_tag")
+        self.assertNotRegex(signature[2], r"\\u[0-9a-fA-F]{4,8}")
+        self.assertIn(chr(0x202E), signature[2])
 
 
 if __name__ == "__main__":
