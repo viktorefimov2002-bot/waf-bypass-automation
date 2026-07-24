@@ -37,9 +37,17 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("xss_bracket_execution", r"\b(?:window|self|top)\s*\[[^]]{1,96}\]\s*[(]"),
         ("xss_location_assignment", r"\blocation\s*=\s*[a-z_][a-z0-9_]*\s*;"),
         ("xss_css_javascript_url", r"background-image\s*:\s*url\s*[(][^)]{0,256}javascript\s*:"),
+        ("xss_concatenated_sink", r"(?:[\x22']a(?:le|l)[\x22']\s*[+]\s*[\x22'](?:rt|ert)[\x22']|[\x22']ale[\x22']\s*[+]\s*[\x22']rt[\x22'])\s*[(]"),
+        ("xss_whitespace_sink", r"a\s+l\s+e\s+r\s+t\s*[(]"),
+        ("xss_parenthesized_sink", r"[(]\s*(?:alert|confirm|prompt)\s*[)]\s*[(]"),
+        ("xss_tagged_call", r"(?:alert|confirm|prompt)\s*[.]\s*(?:call|apply)\s*`"),
+        ("xss_computed_window_call", r"\b(?:window|self|top)\s*\[[^]]{1,128}\]\s*[(]"),
+        ("xss_constructor_chain", r"\bconstructor\s*\[[^]]{1,96}\]\s*[(]"),
     ],
     "sqli": [
         ("sqli_zero_width_union_select", rf"u{_ZW}n{_ZW}i{_ZW}o{_ZW}n[\s\S]{{0,64}}s{_ZW}e{_ZW}l{_ZW}e{_ZW}c{_ZW}t"),
+        ("sqli_quoted_fragment_union_select", r"uni[\x22'][,]?[\x22']on\s+sel[\x22'][,]?[\x22']ect"),
+        ("sqli_split_keyword_tokens", r"u(?:ni|n)[\x22'][,]?[\x22']on[\s\S]{0,32}s(?:el|e)[\x22'][,]?[\x22']ect"),
         ("sqli_fragmented_union_select", r"u(?:n|[\\][\x22'][,]?[\\][\x22']n)[\s\S]{0,24}ion[\s\S]{0,32}s(?:e|[\\][\x22'][,]?[\\][\x22']e)[\s\S]{0,24}lect"),
         ("sqli_union_select", r"\bunion\b[\s\S]{0,64}\bselect\b"),
         ("sqli_union_select_comments", r"\bunion(?:\s|/[*][\s\S]{0,32}[*]/){1,8}select\b"),
@@ -53,6 +61,7 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("command_substitution", r"[$][(][^)]{1,256}[)]"),
         ("command_obfuscated_cat", r"(?:^|[;&|])[\s\S]{0,96}c[^a-z0-9]{0,4}a[^a-z0-9]{0,4}t[\s\S]{0,96}(?:/etc/passwd|/e[^a-z0-9]{0,4}t[^a-z0-9]{0,4}c)"),
         ("command_parameter_chain", r"\bcmd\s*=\s*[^\s]{0,128}(?:[+ ]&&[+ ]|[+ ]\|[+ ])(?:ls|cat|id|whoami)\b"),
+        ("command_backslash_split_cat", r"(?:^|[;&|])[^\x0d\x0a]{0,96}c(?:[\\][a-z0-9]?)*a(?:[\\][a-z0-9]?)*t[^\x0d\x0a]{0,96}/e(?:[\\][a-z0-9]?)*t(?:[\\][a-z0-9]?)*c/passwd"),
     ],
     "lfi": [
         ("path_traversal", r"(?:\.\.(?:/|\x5c)){1,}"),
@@ -309,7 +318,7 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             "supported_encodings": sorted(SUPPORTED_ENCODINGS), "legacy_seclang_safe_regex": True,
             "iterative_transport_decoding": True, "args_name_targeting": True,
             "zero_width_sql_patterns": True, "csv_and_jsonl_indexes": True,
-            "skipped_payload_revision": True,
+            "skipped_payload_revision": True, "quoted_fragment_patterns": True,
         }, "rules": rules,
     })
     if covered_variants + len(skipped_rows) != len(records): raise RuntimeError("Each confirmed bypass must be covered or explicitly skipped")
