@@ -5,7 +5,7 @@ from typing import Any
 
 from .classifier import classify, load_classification_config, load_groups
 from .common import SCHEMA_VERSION, code_verdict, curl_hash, make_run_id, normalize_block_codes, parse_response_code, read_json, utc_now, write_jsonl
-from .curl_parser import extract_payload, extract_request, normalize_payload, parse_variant
+from .curl_parser import extract_payload_details, extract_request, normalize_payload_details, parse_variant
 
 
 def import_report(
@@ -44,8 +44,9 @@ def import_report(
                 continue
             zone, encoding = parse_variant(variant)
             request = extract_request(command)
-            raw_payload = extract_payload(request, zone)
-            normalized_payload, normalization_steps = normalize_payload(raw_payload, encoding)
+            payload = extract_payload_details(request, zone)
+            raw_payload = str(payload["value"])
+            normalization = normalize_payload_details(raw_payload, encoding)
             response_raw = results[variant]
             http_code = parse_response_code(response_raw)
             record = {
@@ -68,9 +69,15 @@ def import_report(
                 "request_host": request["host"],
                 "request_method": request["method"],
                 "request_path": request["path"],
+                "request_query": request["query"],
                 "raw_payload": raw_payload,
-                "normalized_payload": normalized_payload,
-                "normalization_steps": normalization_steps,
+                "payload_component": payload.get("component"),
+                "payload_name": payload.get("name"),
+                "normalized_payload": normalization["value"],
+                "normalization_steps": normalization["steps"],
+                "normalization_layers": normalization["layers"],
+                "normalization_complete": normalization["complete"],
+                "normalization_stop_reason": normalization["stop_reason"],
                 **classification,
             }
             records.append(record)
