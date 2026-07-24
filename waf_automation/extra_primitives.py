@@ -7,7 +7,7 @@ EXTRA_SIGNATURES: Final[dict[str, list[tuple[str, str]]]] = {
     "sqli": [
         (
             "sqli_escaped_quoted_fragment_union_select",
-            r"uni(?:[\\]?[\x22'][,]?[\\]?[\x22'])on\s+sel(?:[\\]?[\x22'][,]?[\\]?[\x22'])ect",
+            r"uni[\\][\x22'][,]?[\\][\x22']on\s+sel[\\][\x22'][,]?[\\][\x22']ect",
         ),
     ],
     "ssrf": [
