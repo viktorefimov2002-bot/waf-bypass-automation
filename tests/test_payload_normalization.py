@@ -33,7 +33,7 @@ class PayloadNormalizationTests(unittest.TestCase):
         result = normalize_payload_details(raw, "BASE64")
         self.assertEqual(result["value"], "admin*)((|userpassword=*)")
         self.assertEqual(result["steps"], ["base64", "percent"])
-        self.assertIn("admin%2A%29", result["layers"])
+        self.assertIn("admin%2A%29%28%28%7Cuserpassword%3D%2A%29", result["layers"])
 
     def test_utf16_then_percent_decode_ldap(self) -> None:
         raw = r"\u0061\u0064\u006d\u0069\u006e\u0025\u0032\u0041\u0025\u0032\u0039\u0025\u0032\u0038\u0025\u0032\u0038\u0025\u0037\u0043\u0075\u0073\u0065\u0072\u0070\u0061\u0073\u0073\u0077\u006f\u0072\u0064\u0025\u0033\u0044\u0025\u0032\u0041\u0025\u0032\u0039"
