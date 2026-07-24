@@ -22,9 +22,6 @@ SEPARATE_TARGET_ENCODINGS = {"BASE64", "UTF-16"}
 DYNAMIC_HEADER_RE = re.compile(r"^(?:wbh|wbc)-[0-9a-f]+$", re.IGNORECASE)
 HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
 
-# Patterns intentionally avoid control-character escapes such as \r and \n.
-# The downstream legacy SecLang lexer can treat those escapes as literal line
-# breaks inside a quoted operator and report an unterminated string.
 SIGNATURES: dict[str, list[tuple[str, str]]] = {
     "xss": [
         ("xss_event_handler", r"<[^>]{0,256}\bon[a-z]{2,32}\s*="),
@@ -49,7 +46,10 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("internal_url", r"\b(?:https?|gopher|file|dict|ftp)://(?:localhost|127\.|169\.254\.|10\.|192\.168\.|172\.(?:1[6-9]|2\d|3[01])\.)"),
         ("non_http_scheme", r"\b(?:gopher|file|dict)://"),
     ],
-    "nosqli": [("nosql_operator", r"[$](?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b")],
+    "nosqli": [
+        ("nosql_operator", r"[$](?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b"),
+        ("nosql_javascript_predicate", r"\bthis\.[a-z_][a-z0-9_]*\.(?:match|test|includes)\s*[(]"),
+    ],
     "ldap": [("ldap_filter_injection", r"(?:\|[(]|&[(]|[)][(]|[*][)][(]|[(]objectclass\s*=)")],
     "ssti": [("template_expression", r"(?:\{\{[\s\S]{1,256}\}\}|[$][{][\s\S]{1,256}\}|<%[\s\S]{1,256}%>)")],
     "ssi": [("ssi_directive", r"<!--\s*#(?:exec|include|echo|config|set)\b")],
@@ -83,11 +83,14 @@ def _select_signature(record: dict[str, Any]) -> tuple[str, str, str] | None:
 
 def _transforms(encoding: str, family: str) -> tuple[str, ...]:
     result = ["t:none", "t:urlDecodeUni"]
-    if encoding == "BASE64": result.append("t:base64DecodeExt")
-    if encoding == "UTF-16" or family == "xss": result.append("t:jsDecode")
-    if family == "xss": result.extend(["t:htmlEntityDecode", "t:cssDecode"])
+    if encoding == "BASE64":
+        result.extend(["t:base64DecodeExt", "t:urlDecodeUni"])
+    if encoding == "UTF-16" or family == "xss":
+        result.extend(["t:jsDecode", "t:urlDecodeUni"])
+    if family == "xss":
+        result.extend(["t:htmlEntityDecode", "t:cssDecode", "t:urlDecodeUni"])
     result.extend(["t:lowercase", "t:removeNulls"])
-    return tuple(dict.fromkeys(result))
+    return tuple(result)
 
 
 def _header_names(record: dict[str, Any]) -> list[str]:
@@ -111,6 +114,11 @@ def _header_names(record: dict[str, Any]) -> list[str]:
 
 def _record_target(record: dict[str, Any]) -> tuple[str | None, str | None]:
     zone = str(record.get("zone", "")).upper()
+    if zone == "ARGS":
+        component = str(record.get("payload_component") or "ARG_VALUE").upper()
+        if component == "ARG_NAME":
+            return "ARGS_NAMES", None
+        return "ARGS", None
     if zone != "HEADER":
         target = TARGETS.get(zone)
         return (target, None) if target else (None, "UNSUPPORTED_ZONE")
@@ -275,6 +283,8 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             "supported_encodings": sorted(SUPPORTED_ENCODINGS),
             "legacy_seclang_safe_regex": True,
             "control_character_escapes": False,
+            "iterative_transport_decoding": True,
+            "args_name_targeting": True,
         },
         "rules": rules,
     })
