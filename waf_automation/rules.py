@@ -40,7 +40,7 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
     ],
     "sqli": [
         ("sqli_zero_width_union_select", rf"u{_ZW}n{_ZW}i{_ZW}o{_ZW}n[\s\S]{{0,64}}s{_ZW}e{_ZW}l{_ZW}e{_ZW}c{_ZW}t"),
-        ("sqli_fragmented_union_select", r"u(?:n|[\\][\"'][,]?[\\][\"']n)[\s\S]{0,24}ion[\s\S]{0,32}s(?:e|[\\][\"'][,]?[\\][\"']e)[\s\S]{0,24}lect"),
+        ("sqli_fragmented_union_select", r"u(?:n|[\\][\x22'][,]?[\\][\x22']n)[\s\S]{0,24}ion[\s\S]{0,32}s(?:e|[\\][\x22'][,]?[\\][\x22']e)[\s\S]{0,24}lect"),
         ("sqli_union_select", r"\bunion\b[\s\S]{0,64}\bselect\b"),
         ("sqli_union_select_comments", r"\bunion(?:\s|/[*][\s\S]{0,32}[*]/){1,8}select\b"),
         ("sqli_select_from", r"\bselect\b[\s\S]{0,96}\bfrom\b"),
@@ -74,7 +74,7 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("nosql_operator", r"[$](?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b"),
         ("nosql_javascript_predicate", r"\bthis\.[a-z_][a-z0-9_]*\.(?:match|test|includes)\s*[(]"),
         ("nosql_return_predicate", r"(?:^|[;'\/])\s*return\s+[' ]{0,4}==\s*[' ]{0,4}"),
-        ("nosql_duplicate_roles", r"[\"']roles[\"']\s*:[\s\S]{0,128}[\"']roles[\"']\s*:"),
+        ("nosql_duplicate_roles", r"[\x22']roles[\x22']\s*:[\s\S]{0,128}[\x22']roles[\x22']\s*:"),
     ],
     "ldap": [
         ("ldap_filter_injection", r"(?:\|[(]|&[(]|[)][(]|[*][)][(]|[(]objectclass\s*=|[*][)][)]|[*][(][)]|[)][|&][(])"),
