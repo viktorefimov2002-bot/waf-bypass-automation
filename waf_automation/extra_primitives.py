@@ -19,6 +19,10 @@ EXTRA_SIGNATURES: Final[dict[str, list[tuple[str, str]]]] = {
             "jndi_lookup",
             r"[$](?:\x5c)?[{][\s\S]{0,192}j[\s\S]{0,48}n[\s\S]{0,48}d[\s\S]{0,48}i[\s\S]{0,48}:",
         ),
+        (
+            "command_backslash_split_cat",
+            r"(?:^|[;&|])[^\x0d\x0a]{0,96}c(?:\x5c[a-z0-9]?)*a(?:\x5c[a-z0-9]?)*t[^\x0d\x0a]{0,96}/e(?:\x5c[a-z0-9]?)*t(?:\x5c[a-z0-9]?)*c/passwd",
+        ),
     ],
     "ssrf": [
         (
