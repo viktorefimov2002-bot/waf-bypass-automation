@@ -6,12 +6,13 @@ import html
 import re
 import shlex
 from typing import Any
-from urllib.parse import parse_qsl, unquote, urlparse
+from urllib.parse import unquote, urlparse
 
 
 STANDARD_HEADERS = {
     "accept", "accept-encoding", "connection", "content-length", "content-type", "host", "user-agent", "referer", "cookie"
 }
+_SAFE_ARGUMENT_NAME_RE = re.compile(r"^[A-Za-z0-9_.~-]{1,64}$")
 
 
 def split_curl(command: str) -> list[str]:
@@ -75,69 +76,141 @@ def _headers_map(headers: list[str]) -> list[tuple[str, str]]:
     return result
 
 
-def extract_payload(request: dict[str, Any], zone: str) -> str:
+def extract_payload_details(request: dict[str, Any], zone: str) -> dict[str, Any]:
     headers = _headers_map(request["headers"])
     if zone == "URL":
-        return request["path"] + (f"?{request['query']}" if request["query"] else "")
+        value = request["path"] + (f"?{request['query']}" if request["query"] else "")
+        return {"value": value, "component": "REQUEST_URI", "name": None}
     if zone == "ARGS":
-        pairs = parse_qsl(request["query"], keep_blank_values=True)
-        return "&".join(value if value else key for key, value in pairs) if pairs else request["query"]
+        query = str(request["query"] or "")
+        # Do not use parse_qsl for scanner payloads: literal &, = and Base64
+        # padding can be part of the attack string and must remain intact.
+        name, separator, value = query.partition("=")
+        if separator and _SAFE_ARGUMENT_NAME_RE.fullmatch(name):
+            return {"value": value, "component": "ARG_VALUE", "name": name, "raw_query": query}
+        return {"value": query, "component": "ARG_NAME", "name": None, "raw_query": query}
     if zone == "BODY":
-        return "\n".join(request["data"])
+        return {"value": "\n".join(request["data"]), "component": "REQUEST_BODY", "name": None}
     if zone == "COOKIE":
-        return "\n".join(value for name, value in headers if name.lower() == "cookie")
+        return {"value": "\n".join(value for name, value in headers if name.lower() == "cookie"), "component": "COOKIE_VALUE", "name": None}
     if zone == "USER-AGENT":
-        return "\n".join(value for name, value in headers if name.lower() == "user-agent")
+        return {"value": "\n".join(value for name, value in headers if name.lower() == "user-agent"), "component": "HEADER_VALUE", "name": "User-Agent"}
     if zone == "REFERER":
-        return "\n".join(value for name, value in headers if name.lower() == "referer")
+        return {"value": "\n".join(value for name, value in headers if name.lower() == "referer"), "component": "HEADER_VALUE", "name": "Referer"}
     if zone == "HEADER":
-        custom = [f"{name}: {value}" for name, value in headers if name.lower() not in STANDARD_HEADERS]
-        return "\n".join(custom or [f"{name}: {value}" for name, value in headers])
-    return request["url"]
+        custom = [(name, value) for name, value in headers if name.lower() not in STANDARD_HEADERS]
+        selected = custom or headers
+        return {
+            "value": "\n".join(value for _, value in selected),
+            "component": "HEADER_VALUE",
+            "name": selected[0][0] if len(selected) == 1 else None,
+        }
+    return {"value": request["url"], "component": "UNKNOWN", "name": None}
+
+
+def extract_payload(request: dict[str, Any], zone: str) -> str:
+    return str(extract_payload_details(request, zone)["value"])
 
 
 def _decode_js_unicode(value: str) -> str:
-    def replace(match: re.Match[str]) -> str:
+    def replace_unicode(match: re.Match[str]) -> str:
         try:
             return chr(int(match.group(1), 16))
         except (ValueError, OverflowError):
             return match.group(0)
-    return re.sub(r"\\u([0-9a-fA-F]{4})", replace, value)
+
+    def replace_hex(match: re.Match[str]) -> str:
+        try:
+            return chr(int(match.group(1), 16))
+        except (ValueError, OverflowError):
+            return match.group(0)
+
+    value = re.sub(r"\\u([0-9a-fA-F]{4})", replace_unicode, value)
+    return re.sub(r"\\x([0-9a-fA-F]{2})", replace_hex, value)
 
 
-def _base64_candidates(value: str) -> list[str]:
-    candidates = re.findall(r"(?<![A-Za-z0-9+/=])[A-Za-z0-9+/]{12,}={0,2}(?![A-Za-z0-9+/=])", value)
-    if re.fullmatch(r"[A-Za-z0-9+/]{8,}={0,2}", value.strip()):
-        candidates.insert(0, value.strip())
-    return sorted(set(candidates), key=len, reverse=True)
+def _looks_textual(value: str) -> bool:
+    if not value:
+        return False
+    printable = sum(character.isprintable() or character in "\r\n\t" for character in value)
+    return printable / len(value) >= 0.85
+
+
+def _decode_base64(value: str) -> str | None:
+    compact = re.sub(r"\s+", "", value)
+    if len(compact) < 8:
+        return None
+    padding = "=" * ((4 - len(compact) % 4) % 4)
+    try:
+        # Scanner variants can deliberately contain separators such as && inside
+        # a Base64-looking query. validate=False mirrors tolerant WAF decoders.
+        decoded_bytes = base64.b64decode(compact + padding, validate=False)
+        decoded = decoded_bytes.decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return None
+    return decoded if _looks_textual(decoded) else None
+
+
+def normalize_payload_details(raw: str, encoding: str, max_layers: int = 6) -> dict[str, Any]:
+    value = raw
+    layers = [raw]
+    steps: list[str] = []
+    encoding = encoding.upper()
+    base64_applied = False
+
+    for _ in range(max_layers):
+        changed = False
+
+        percent_decoded = unquote(value)
+        if percent_decoded != value:
+            value = percent_decoded
+            steps.append("percent")
+            layers.append(value)
+            changed = True
+
+        html_decoded = html.unescape(value)
+        if html_decoded != value:
+            value = html_decoded
+            steps.append("html_entity")
+            layers.append(value)
+            changed = True
+
+        js_decoded = _decode_js_unicode(value)
+        if js_decoded != value:
+            value = js_decoded
+            steps.append("js_unicode")
+            layers.append(value)
+            changed = True
+
+        if encoding == "BASE64" and not base64_applied:
+            decoded = _decode_base64(value)
+            if decoded is not None and decoded != value:
+                value = decoded
+                base64_applied = True
+                steps.append("base64")
+                layers.append(value)
+                changed = True
+
+        without_nulls = value.replace("\x00", "")
+        if without_nulls != value:
+            value = without_nulls
+            steps.append("remove_nulls")
+            layers.append(value)
+            changed = True
+
+        if not changed:
+            break
+
+    stop_reason = "STABLE" if len(layers) <= max_layers + 1 else "MAX_LAYERS"
+    return {
+        "value": value,
+        "steps": steps,
+        "layers": layers,
+        "complete": stop_reason == "STABLE",
+        "stop_reason": stop_reason,
+    }
 
 
 def normalize_payload(raw: str, encoding: str) -> tuple[str, list[str]]:
-    value = raw
-    steps: list[str] = []
-    for _ in range(2):
-        decoded = unquote(value)
-        if decoded == value:
-            break
-        value = decoded
-        steps.append("percent")
-    html_decoded = html.unescape(value)
-    if html_decoded != value:
-        value = html_decoded
-        steps.append("html_entity")
-    js_decoded = _decode_js_unicode(value)
-    if js_decoded != value:
-        value = js_decoded
-        steps.append("js_unicode")
-    if encoding == "BASE64":
-        for candidate in _base64_candidates(value):
-            try:
-                padding = "=" * ((4 - len(candidate) % 4) % 4)
-                decoded_bytes = base64.b64decode(candidate + padding, validate=True)
-                decoded = decoded_bytes.decode("utf-8")
-            except (binascii.Error, UnicodeDecodeError, ValueError):
-                continue
-            value = value.replace(candidate, decoded, 1)
-            steps.append("base64")
-            break
-    return value, steps
+    details = normalize_payload_details(raw, encoding)
+    return str(details["value"]), list(details["steps"])
