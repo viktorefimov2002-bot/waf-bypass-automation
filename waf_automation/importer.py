@@ -73,6 +73,8 @@ def import_report(
                 "raw_payload": raw_payload,
                 "payload_component": payload.get("component"),
                 "payload_name": payload.get("name"),
+                "payload_names": payload.get("cookie_names"),
+                "raw_cookie": payload.get("raw_cookie"),
                 "normalized_payload": normalization["value"],
                 "normalization_steps": normalization["steps"],
                 "normalization_layers": normalization["layers"],

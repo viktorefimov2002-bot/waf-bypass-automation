@@ -77,6 +77,21 @@ def _headers_map(headers: list[str]) -> list[tuple[str, str]]:
     return result
 
 
+def _cookie_pairs(cookie_headers: list[str]) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for header in cookie_headers:
+        for item in header.split(";"):
+            item = item.strip()
+            if not item:
+                continue
+            name, separator, value = item.partition("=")
+            if separator:
+                pairs.append((name.strip(), value.strip()))
+            else:
+                pairs.append((item, ""))
+    return pairs
+
+
 def extract_payload_details(request: dict[str, Any], zone: str) -> dict[str, Any]:
     headers = _headers_map(request["headers"])
     if zone == "URL":
@@ -84,12 +99,8 @@ def extract_payload_details(request: dict[str, Any], zone: str) -> dict[str, Any
         return {"value": value, "component": "REQUEST_URI", "name": None}
     if zone == "ARGS":
         query = str(request["query"] or "")
-        # A trailing '=' or '==' can be Base64 padding rather than an HTTP
-        # name/value separator. Preserve the whole query in that case.
         if _BASE64_QUERY_RE.fullmatch(query):
             return {"value": query, "component": "ARG_NAME", "name": None, "raw_query": query}
-        # Do not use parse_qsl for scanner payloads: literal &, = and Base64
-        # padding can be part of the attack string and must remain intact.
         name, separator, value = query.partition("=")
         if separator and _SAFE_ARGUMENT_NAME_RE.fullmatch(name):
             return {"value": value, "component": "ARG_VALUE", "name": name, "raw_query": query}
@@ -97,7 +108,25 @@ def extract_payload_details(request: dict[str, Any], zone: str) -> dict[str, Any
     if zone == "BODY":
         return {"value": "\n".join(request["data"]), "component": "REQUEST_BODY", "name": None}
     if zone == "COOKIE":
-        return {"value": "\n".join(value for name, value in headers if name.lower() == "cookie"), "component": "COOKIE_VALUE", "name": None}
+        cookie_headers = [value for name, value in headers if name.lower() == "cookie"]
+        pairs = _cookie_pairs(cookie_headers)
+        if len(pairs) == 1:
+            name, value = pairs[0]
+            return {
+                "value": value,
+                "component": "COOKIE_VALUE",
+                "name": name,
+                "raw_cookie": cookie_headers[0] if cookie_headers else "",
+            }
+        if pairs:
+            return {
+                "value": "\n".join(value for _, value in pairs),
+                "component": "COOKIE_VALUE",
+                "name": None,
+                "cookie_names": [name for name, _ in pairs],
+                "raw_cookie": "\n".join(cookie_headers),
+            }
+        return {"value": "", "component": "COOKIE_VALUE", "name": None, "raw_cookie": "\n".join(cookie_headers)}
     if zone == "USER-AGENT":
         return {"value": "\n".join(value for name, value in headers if name.lower() == "user-agent"), "component": "HEADER_VALUE", "name": "User-Agent"}
     if zone == "REFERER":
