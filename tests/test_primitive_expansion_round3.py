@@ -30,7 +30,7 @@ class PrimitiveExpansionRound3Tests(unittest.TestCase):
 
     def test_xss_tagged_call_and_constructor_chain(self) -> None:
         self.assert_primitive("XSS", "alert.call`x`", "xss_tagged_call")
-        self.assert_primitive("XSS", "constructor['constructor']('alert(1)')()", "xss_constructor_chain")
+        self.assert_primitive("XSS", "constructor['constructor']('return 1')()", "xss_constructor_chain")
 
 
 if __name__ == "__main__":
