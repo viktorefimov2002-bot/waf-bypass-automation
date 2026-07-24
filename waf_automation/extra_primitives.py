@@ -7,7 +7,17 @@ EXTRA_SIGNATURES: Final[dict[str, list[tuple[str, str]]]] = {
     "sqli": [
         (
             "sqli_escaped_quoted_fragment_union_select",
-            r"uni[\\][\x22'][,]?[\\][\x22']on\s+sel[\\][\x22'][,]?[\\][\x22']ect",
+            r"uni\x5c[\x22'][,]?\x5c[\x22']on\s+sel\x5c[\x22'][,]?\x5c[\x22']ect",
+        ),
+        (
+            "sqli_fragmented_union_select",
+            r"u(?:n|\x5c[\x22'][,]?\x5c[\x22']n)[\s\S]{0,24}ion[\s\S]{0,32}s(?:e|\x5c[\x22'][,]?\x5c[\x22']e)[\s\S]{0,24}lect",
+        ),
+    ],
+    "command": [
+        (
+            "jndi_lookup",
+            r"[$](?:\x5c)?[{][\s\S]{0,192}j[\s\S]{0,48}n[\s\S]{0,48}d[\s\S]{0,48}i[\s\S]{0,48}:",
         ),
     ],
     "ssrf": [
@@ -31,7 +41,7 @@ EXTRA_SIGNATURES: Final[dict[str, list[tuple[str, str]]]] = {
         ),
         (
             "xss_css_escaped_javascript",
-            r"background-image\s*:\s*url\s*[(][^)]{0,64}(?:[\\][0-9a-f]{1,6}\s*){6,}",
+            r"background-image\s*:\s*url\s*[(][^)]{0,64}(?:\x5c[0-9a-f]{1,6}\s*){6,}",
         ),
         (
             "xss_malformed_svg_entity",
@@ -48,9 +58,9 @@ EXTRA_SIGNATURES: Final[dict[str, list[tuple[str, str]]]] = {
 
 
 def apply_extra_primitives(signatures: dict[str, list[tuple[str, str]]]) -> None:
-    """Prepend reviewed signatures so specific evasions win over broad primitives."""
+    """Prepend reviewed signatures and replace legacy-incompatible patterns by name."""
     for family, additions in EXTRA_SIGNATURES.items():
         current = signatures.setdefault(family, [])
-        existing_names = {name for name, _ in current}
-        new_items = [item for item in additions if item[0] not in existing_names]
-        signatures[family] = new_items + current
+        replacement_names = {name for name, _ in additions}
+        retained = [item for item in current if item[0] not in replacement_names]
+        signatures[family] = list(additions) + retained
