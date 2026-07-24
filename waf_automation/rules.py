@@ -159,6 +159,7 @@ def _render_rule(rule: dict[str, Any]) -> str:
     actions = [f"id:{rule['rule_id']}", "phase:2", "deny", *rule["transforms"],
                f"msg:'Candidate coverage for confirmed waf-bypass: {rule['primitive']}'",
                "tag:'waf-bypass-candidate'", "severity:'CRITICAL'", "setvar:tx.anomaly_score=+5"]
+    action_lines = ",\\\n    ".join(actions)
     warning = ""
     if rule.get("generic_header_target"):
         warning = ("# HIGH-RISK TARGET: REQUEST_HEADERS scans all request-header values. "
@@ -168,7 +169,7 @@ def _render_rule(rule: dict[str, Any]) -> str:
         + warning
         + "# REVIEW REQUIRED: validate converter compatibility, coverage and false positives before production.\n"
         + f"SecRule {rule['target']} \"@rx {rule['pattern']}\" \\\n"
-        + f"    \"{',\\\n    '.join(actions)}\"\n"
+        + f"    \"{action_lines}\"\n"
     )
 
 
