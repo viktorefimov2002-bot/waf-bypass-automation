@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
-from .common import read_jsonl, stable_key, write_json
+from .common import read_jsonl, stable_key, write_json, write_jsonl
 from .curl_parser import STANDARD_HEADERS, extract_request
 
 TARGETS = {
@@ -18,6 +18,8 @@ SUPPORTED_ENCODINGS = {"NONE", "BASE64", "UTF-16", "HTML-ENTITY"}
 SEPARATE_TARGET_ENCODINGS = {"BASE64", "UTF-16"}
 DYNAMIC_HEADER_RE = re.compile(r"^(?:wbh|wbc)-[0-9a-f]+$", re.IGNORECASE)
 HEADER_NAME_RE = re.compile(r"^[A-Za-z0-9!#$%&'*+.^_`|~-]+$")
+ZERO_WIDTH_CHARS = "\u200b\u200c\u200d\ufeff"
+_ZW = f"[{ZERO_WIDTH_CHARS}]*"
 
 SIGNATURES: dict[str, list[tuple[str, str]]] = {
     "xss": [
@@ -29,6 +31,7 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("xss_bracket_execution", r"\b(?:window|self|top)\s*\[[^]]{1,96}\]\s*[(]"),
     ],
     "sqli": [
+        ("sqli_zero_width_union_select", rf"u{_ZW}n{_ZW}i{_ZW}o{_ZW}n[\s\S]{{0,64}}s{_ZW}e{_ZW}l{_ZW}e{_ZW}c{_ZW}t"),
         ("sqli_union_select", r"\bunion\b[\s\S]{0,64}\bselect\b"),
         ("sqli_union_select_comments", r"\bunion(?:\s|/[*][\s\S]{0,32}[*]/){1,8}select\b"),
         ("sqli_select_from", r"\bselect\b[\s\S]{0,96}\bfrom\b"),
@@ -58,9 +61,7 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("nosql_operator", r"[$](?:where|ne|nin|gt|gte|lt|lte|regex|exists)\b"),
         ("nosql_javascript_predicate", r"\bthis\.[a-z_][a-z0-9_]*\.(?:match|test|includes)\s*[(]"),
     ],
-    "ldap": [
-        ("ldap_filter_injection", r"(?:\|[(]|&[(]|[)][(]|[*][)][(]|[(]objectclass\s*=|[*][)][)]|[*][(][)]|[)][|&][(])"),
-    ],
+    "ldap": [("ldap_filter_injection", r"(?:\|[(]|&[(]|[)][(]|[*][)][(]|[(]objectclass\s*=|[*][)][)]|[*][(][)]|[)][|&][(])")],
     "ssti": [
         ("template_expression", r"(?:\{\{[\s\S]{1,256}\}\}|[$][{][\s\S]{1,256}\}|<%[\s\S]{1,256}%>)"),
         ("smarty_expression", r"\{[$][a-z_][a-z0-9_.]{0,128}\}"),
@@ -78,18 +79,11 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
 
 def _family(record: dict[str, Any]) -> str:
     category = str(record.get("category", "")).upper()
-    if category == "XSS": return "xss"
-    if category == "SQLI": return "sqli"
-    if category in {"CM", "RCE"}: return "command"
-    if category == "LFI": return "lfi"
-    if category == "RFI": return "rfi"
-    if category == "SSRF": return "ssrf"
-    if category == "NOSQLI": return "nosqli"
-    if category == "LDAP": return "ldap"
-    if category == "SSTI": return "ssti"
-    if category == "SSI": return "ssi"
-    if category == "OR": return "redirect"
-    return "generic"
+    return {
+        "XSS": "xss", "SQLI": "sqli", "CM": "command", "RCE": "command",
+        "LFI": "lfi", "RFI": "rfi", "SSRF": "ssrf", "NOSQLI": "nosqli",
+        "LDAP": "ldap", "SSTI": "ssti", "SSI": "ssi", "OR": "redirect",
+    }.get(category, "generic")
 
 
 def _select_signature(record: dict[str, Any]) -> tuple[str, str, str] | None:
@@ -181,6 +175,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) ->
 
 def _skip_row(record: dict[str, Any], reason: str, detail: str, family: str | None = None) -> dict[str, Any]:
     normalized = str(record.get("normalized_payload") or "")
+    invisible = [f"U+{ord(ch):04X}" for ch in normalized if ch in ZERO_WIDTH_CHARS]
     return {
         "stable_key": stable_key(record), "payload_path": record.get("payload_path"),
         "variant": record.get("variant"), "group_id": record.get("group_id"),
@@ -190,6 +185,7 @@ def _skip_row(record: dict[str, Any], reason: str, detail: str, family: str | No
         "normalization_complete": record.get("normalization_complete"),
         "normalization_steps": ">".join(record.get("normalization_steps") or []),
         "reason": reason, "detail": detail,
+        "invisible_codepoints": ",".join(sorted(set(invisible))),
         "normalized_payload_preview": normalized[:240],
     }
 
@@ -248,6 +244,7 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
                 "group_id": group_id, "rule_id": rule["rule_id"], "primitive": primitive,
                 "zone": record.get("zone"), "encoding": record.get("encoding"), "rule_target": rule["target"],
                 "grouped_rule": len(covered) > 1, "generic_header_target": bool(record["_generic_header_target"]),
+                "normalized_payload": record.get("normalized_payload"),
             })
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -257,11 +254,18 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
         "# Dynamic scanner headers may map to REQUEST_HEADERS; such rules have explicit FP/load warnings.\n"
         "# Only recognized exploit primitives are emitted; fallback payload rules are skipped.\n\n"
         + "\n".join(_render_rule(rule) for rule in rules), encoding="utf-8")
+
+    coverage_fields = ["stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive", "zone", "encoding", "rule_target", "grouped_rule", "generic_header_target", "normalized_payload"]
     coverage_path = output_dir / "coverage.csv"
-    _write_csv(coverage_path, coverage_rows, ["stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive", "zone", "encoding", "rule_target", "grouped_rule", "generic_header_target"])
+    _write_csv(coverage_path, coverage_rows, coverage_fields)
+    coverage_jsonl_path = output_dir / "coverage.jsonl"
+    write_jsonl(coverage_jsonl_path, coverage_rows)
+
+    skipped_fields = ["stable_key", "payload_path", "variant", "group_id", "category", "family", "zone", "encoding", "payload_component", "payload_name", "normalization_complete", "normalization_steps", "reason", "detail", "invisible_codepoints", "normalized_payload_preview"]
     skipped_path = output_dir / "skipped.csv"
-    skipped_fields = ["stable_key", "payload_path", "variant", "group_id", "category", "family", "zone", "encoding", "payload_component", "payload_name", "normalization_complete", "normalization_steps", "reason", "detail", "normalized_payload_preview"]
     _write_csv(skipped_path, skipped_rows, skipped_fields)
+    skipped_jsonl_path = output_dir / "skipped.jsonl"
+    write_jsonl(skipped_jsonl_path, skipped_rows)
 
     grouped_rules = sum(rule["coverage_count"] > 1 for rule in rules)
     covered_variants = len(coverage_rows)
@@ -277,6 +281,7 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             "generic_header_load_risk": "INCREASED", "split_targets_for_encodings": sorted(SEPARATE_TARGET_ENCODINGS),
             "supported_encodings": sorted(SUPPORTED_ENCODINGS), "legacy_seclang_safe_regex": True,
             "iterative_transport_decoding": True, "args_name_targeting": True,
+            "zero_width_sql_patterns": True, "csv_and_jsonl_indexes": True,
         }, "rules": rules,
     })
     if covered_variants + len(skipped_rows) != len(records): raise RuntimeError("Each confirmed bypass must be covered or explicitly skipped")
@@ -284,5 +289,7 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
         "confirmed_bypass_variants": len(records), "covered_variants": covered_variants, "skipped_variants": len(skipped_rows),
         "candidate_rules": len(rules), "grouped_rules": grouped_rules, "max_variants_per_rule": max(rule["coverage_count"] for rule in rules),
         "skip_reason_counts": reason_counts, "generic_header_rules": sum(bool(rule["generic_header_target"]) for rule in rules),
-        "coverage": str(coverage_path), "skipped": str(skipped_path), "rules": str(conf_path), "manifest": str(manifest_path),
+        "coverage": str(coverage_path), "coverage_jsonl": str(coverage_jsonl_path),
+        "skipped": str(skipped_path), "skipped_jsonl": str(skipped_jsonl_path),
+        "rules": str(conf_path), "manifest": str(manifest_path),
     }
