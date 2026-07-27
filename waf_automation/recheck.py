@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import json
 import re
 import subprocess
+import sys
 import tempfile
 import time
 from pathlib import Path
 from typing import Any
 
-from .common import code_verdict, normalize_block_codes, read_jsonl, stable_key, utc_now, write_jsonl
+from .common import code_verdict, normalize_block_codes, read_jsonl, stable_key, utc_now
 from .curl_parser import extract_request, split_curl
 
 
@@ -17,6 +19,7 @@ SAFE_OPTIONS_WITH_VALUE = {
     "--cookie", "--user-agent", "--referer",
 }
 SAFE_FLAG_OPTIONS = {"--compressed", "-k", "--insecure", "--http1.1", "--http2", "--path-as-is"}
+CONFIRMED_BYPASS_VERDICTS = {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
 
 
 def _has_output_conflict(argv: list[str]) -> str | None:
@@ -152,38 +155,68 @@ def recheck_records(
     selected = [
         record for record in records
         if (group_id is None or record.get("group_id") == group_id)
-        and (not only_confirmed_bypasses or record.get("final_verdict") == "BYPASS_CONFIRMED")
+        and (
+            not only_confirmed_bypasses
+            or record.get("final_verdict") in CONFIRMED_BYPASS_VERDICTS
+        )
     ]
     if limit is not None:
         selected = selected[:limit]
-    results: list[dict[str, Any]] = []
-    for index, record in enumerate(selected):
-        request = extract_request(record["curl"])
-        validate_replay_argv(request["argv"])
-        host = request["host"]
-        if allow_host and host != allow_host:
-            raise ValueError(f"Host {host!r} is not allowed; expected {allow_host!r}")
-        if not allow_host and execute:
-            raise ValueError("--allow-host is required together with --execute")
-        result = dict(record)
-        result["stable_key"] = stable_key(record)
-        if execute:
-            try:
-                result.update(_execute(record, timeout))
-            except Exception as exc:
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    print(
+        f"Replay selection: selected={len(selected)}, execute={execute}, "
+        f"timeout={timeout}s, delay={delay}s, output={output_path}",
+        file=sys.stderr,
+        flush=True,
+    )
+
+    executed = 0
+    with output_path.open("w", encoding="utf-8") as output_handle:
+        for index, record in enumerate(selected, start=1):
+            request = extract_request(record["curl"])
+            validate_replay_argv(request["argv"])
+            host = request["host"]
+            if allow_host and host != allow_host:
+                raise ValueError(f"Host {host!r} is not allowed; expected {allow_host!r}")
+            if not allow_host and execute:
+                raise ValueError("--allow-host is required together with --execute")
+
+            key = stable_key(record)
+            print(
+                f"[{index}/{len(selected)}] replay {key} host={host}",
+                file=sys.stderr,
+                flush=True,
+            )
+            result = dict(record)
+            result["stable_key"] = key
+            if execute:
+                try:
+                    result.update(_execute(record, timeout))
+                except Exception as exc:
+                    result.update({
+                        "checked_at": utc_now(), "http_code": None, "server_header": None,
+                        "code_verdict": "UNKNOWN_CODE", "route_verdict": "ROUTE_UNCONFIRMED",
+                        "final_verdict": "CHECK_ERROR", "duration_ms": None,
+                        "curl_exit_code": None, "stderr": str(exc),
+                    })
+                executed += 1
+            else:
                 result.update({
-                    "checked_at": utc_now(), "http_code": None, "server_header": None,
-                    "code_verdict": "UNKNOWN_CODE", "route_verdict": "ROUTE_UNCONFIRMED",
-                    "final_verdict": "CHECK_ERROR", "duration_ms": None,
-                    "curl_exit_code": None, "stderr": str(exc),
+                    "checked_at": None, "server_header": None, "route_verdict": "NOT_CHECKED",
+                    "final_verdict": "DRY_RUN", "duration_ms": None, "curl_exit_code": None, "stderr": "",
                 })
-        else:
-            result.update({
-                "checked_at": None, "server_header": None, "route_verdict": "NOT_CHECKED",
-                "final_verdict": "DRY_RUN", "duration_ms": None, "curl_exit_code": None, "stderr": "",
-            })
-        results.append(result)
-        if execute and delay > 0 and index < len(selected) - 1:
-            time.sleep(delay)
-    write_jsonl(output_path, results)
-    return {"selected": len(selected), "executed": len(selected) if execute else 0, "output": str(output_path)}
+
+            output_handle.write(json.dumps(result, ensure_ascii=False, sort_keys=True))
+            output_handle.write("\n")
+            output_handle.flush()
+            print(
+                f"[{index}/{len(selected)}] result={result.get('final_verdict')} "
+                f"http={result.get('http_code')} duration_ms={result.get('duration_ms')}",
+                file=sys.stderr,
+                flush=True,
+            )
+            if execute and delay > 0 and index < len(selected):
+                time.sleep(delay)
+
+    return {"selected": len(selected), "executed": executed, "output": str(output_path)}
