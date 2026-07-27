@@ -10,11 +10,10 @@ from typing import Any
 from .common import read_jsonl, write_json, write_jsonl
 from .rules import _render_rule, _validate_pattern
 
-
 COVERAGE_FIELDS = [
     "stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive",
-    "zone", "encoding", "rule_target", "grouped_rule", "generic_header_target",
-    "normalized_payload",
+    "zone", "encoding", "rule_target", "phase", "normalization_steps", "transform_profile",
+    "grouped_rule", "generic_header_target", "normalized_payload",
 ]
 UNRESOLVED_FIELDS = [
     "stable_key", "rule_id", "status", "reason", "primitive", "encoding", "curl",
@@ -37,15 +36,10 @@ def _load_manifest(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]
 
 def _load_coverage(path: Path) -> dict[str, dict[str, Any]]:
     with path.open(encoding="utf-8", newline="") as handle:
-        return {
-            str(row.get("stable_key")): row
-            for row in csv.DictReader(handle)
-            if row.get("stable_key")
-        }
+        return {str(row.get("stable_key")): row for row in csv.DictReader(handle) if row.get("stable_key")}
 
 
 def _literal_backslash_u(codepoint: str) -> str:
-    """Match a literal transport sequence such as backslash-u002f without using regex \\u escapes."""
     return rf"\x5cu{codepoint}"
 
 
@@ -53,39 +47,27 @@ def _encoded_fallback(row: dict[str, Any], rule: dict[str, Any]) -> tuple[str | 
     encoding = str(row.get("encoding") or "NONE").upper()
     primitive = str(row.get("rule_primitive") or rule.get("primitive") or "")
     pattern = str(rule.get("pattern") or "")
-
     if encoding != "UTF-16":
         return None, "NO_SAFE_REFINEMENT_STRATEGY"
-
     if primitive == "sensitive_local_file":
         slash = rf"(?:{_literal_backslash_u('002f')}|%u002f)"
-        fallback = rf"(?:{slash}etc{slash}passwd|{slash}proc{slash}self)"
-        return f"(?:{pattern}|{fallback})", "ADD_UTF16_TRANSPORT_FALLBACK"
-
+        return f"(?:{pattern}|(?:{slash}etc{slash}passwd|{slash}proc{slash}self))", "ADD_UTF16_TRANSPORT_FALLBACK"
     if primitive == "template_expression":
         left = rf"(?:{_literal_backslash_u('007b')}|%u007b)"
         right = rf"(?:{_literal_backslash_u('007d')}|%u007d)"
-        fallback = rf"{left}{left}.{{1,256}}{right}{right}"
-        return f"(?:{pattern}|{fallback})", "ADD_UTF16_TRANSPORT_FALLBACK"
-
+        return f"(?:{pattern}|{left}{left}.{{1,256}}{right}{right})", "ADD_UTF16_TRANSPORT_FALLBACK"
     if primitive == "xss_execution_sink":
-        letters = ["0061", "006c", "0065", "0072", "0074"]
-        encoded_alert = "".join(
-            rf"(?:{_literal_backslash_u(codepoint)}|%u{codepoint})"
-            for codepoint in letters
-        )
+        encoded_alert = "".join(rf"(?:{_literal_backslash_u(cp)}|%u{cp})" for cp in ["0061", "006c", "0065", "0072", "0074"])
         opening_paren = rf"(?:{_literal_backslash_u('0028')}|%u0028)"
-        fallback = rf"{encoded_alert}.{{0,32}}{opening_paren}"
-        return f"(?:{pattern}|{fallback})", "ADD_UTF16_TRANSPORT_FALLBACK"
-
+        return f"(?:{pattern}|{encoded_alert}.{{0,32}}{opening_paren})", "ADD_UTF16_TRANSPORT_FALLBACK"
     return None, "NO_SAFE_REFINEMENT_STRATEGY"
 
 
 def _validate_refined_pattern(pattern: str) -> None:
     _validate_pattern(pattern)
-    if re.search(r"\\u[0-9a-fA-F]{4,8}", pattern):
+    if re.search(r"\u[0-9a-fA-F]{4,8}", pattern):
         raise ValueError(f"Textual Unicode regex escape is not wirefilter-compatible: {pattern}")
-    if "[\\\\]" in pattern:
+    if "[\\]" in pattern:
         raise ValueError(f"Backslash-only character class is not legacy-compatible: {pattern}")
 
 
@@ -101,39 +83,35 @@ def _manual_row(row: dict[str, Any], status: str, reason: str, rule_id: str | No
     }
 
 
+def _phase_from_rule(rule: dict[str, Any]) -> int:
+    if rule.get("phase") in {1, 2, "1", "2"}:
+        return int(rule["phase"])
+    return 2 if "REQUEST_BODY" in str(rule.get("target") or "") else 1
+
+
 def refine_rules(validation_path: Path, manifest_path: Path, coverage_path: Path, output_dir: Path) -> dict[str, Any]:
-    validation_rows = [
-        row for row in read_jsonl(validation_path)
-        if row.get("status") == "STILL_BYPASSED"
-    ]
+    validation_rows = [row for row in read_jsonl(validation_path) if row.get("status") == "STILL_BYPASSED"]
     if not validation_rows:
         raise ValueError("No STILL_BYPASSED records found; refinement is not required")
-
     source_manifest, rules_by_id = _load_manifest(manifest_path)
     coverage_by_key = _load_coverage(coverage_path)
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     manual_rows: list[dict[str, Any]] = []
-
     for row in validation_rows:
         rule_id = str(row.get("rule_id") or "")
         stable_key = str(row.get("stable_key") or "")
         coverage = coverage_by_key.get(stable_key)
         if not rule_id or rule_id not in rules_by_id:
-            manual_rows.append(_manual_row(row, "MANUAL_REVIEW_REQUIRED", "MISSING_RULE_MAPPING", rule_id))
-            continue
+            manual_rows.append(_manual_row(row, "MANUAL_REVIEW_REQUIRED", "MISSING_RULE_MAPPING", rule_id)); continue
         if not coverage or str(coverage.get("rule_id") or "") != rule_id:
-            manual_rows.append(_manual_row(row, "MANUAL_REVIEW_REQUIRED", "COVERAGE_RULE_MISMATCH", rule_id))
-            continue
+            manual_rows.append(_manual_row(row, "MANUAL_REVIEW_REQUIRED", "COVERAGE_RULE_MISMATCH", rule_id)); continue
         grouped[rule_id].append(row)
-
     refined_rules: list[dict[str, Any]] = []
     changes: list[dict[str, Any]] = []
     refined_rule_ids: set[str] = set()
-
     def _sort_rule(item: tuple[str, list[dict[str, Any]]]) -> tuple[int, str]:
         rule_id = item[0]
         return (int(rule_id), rule_id) if rule_id.isdigit() else (2**31 - 1, rule_id)
-
     for rule_id, rows in sorted(grouped.items(), key=_sort_rule):
         old_rule = rules_by_id[rule_id]
         proposals: list[str] = []
@@ -141,20 +119,12 @@ def refine_rules(validation_path: Path, manifest_path: Path, coverage_path: Path
         for row in rows:
             proposal, reason = _encoded_fallback(row, old_rule)
             if proposal:
-                proposals.append(proposal)
-                reasons.append(reason)
-
+                proposals.append(proposal); reasons.append(reason)
         unique = list(dict.fromkeys(proposals))
         if len(unique) != 1:
             for row in rows:
-                manual_rows.append(_manual_row(
-                    row,
-                    "CANNOT_SAFELY_REFINE",
-                    "AMBIGUOUS_OR_UNSUPPORTED_REFINEMENT",
-                    rule_id,
-                ))
+                manual_rows.append(_manual_row(row, "CANNOT_SAFELY_REFINE", "AMBIGUOUS_OR_UNSUPPORTED_REFINEMENT", rule_id))
             continue
-
         new_pattern = unique[0]
         _validate_refined_pattern(new_pattern)
         new_rule = dict(old_rule)
@@ -163,6 +133,7 @@ def refine_rules(validation_path: Path, manifest_path: Path, coverage_path: Path
             "revision": old_revision + 1,
             "supersedes_revision": old_revision,
             "pattern": new_pattern,
+            "phase": _phase_from_rule(old_rule),
             "coverage_status": "REFINED_NOT_VALIDATED",
             "review_status": "REVIEW_REQUIRED",
             "refinement_reason": reasons[0],
@@ -181,17 +152,13 @@ def refine_rules(validation_path: Path, manifest_path: Path, coverage_path: Path
             "new_pattern": new_pattern,
             "affected_payloads": len(rows),
         })
-
     output_dir.mkdir(parents=True, exist_ok=True)
     conf_path = output_dir / "refined-rules.conf"
     conf_path.write_text(
         "# Auto-generated refined SecLang rules. DO NOT auto-load.\n"
         "# Replace only the listed rule IDs after manual review and converter validation.\n"
         "# Refined regexes follow the same legacy/wirefilter compatibility policy as suggest-rules.\n\n"
-        + "\n".join(_render_rule(rule) for rule in refined_rules),
-        encoding="utf-8",
-    )
-
+        + "\n".join(_render_rule(rule) for rule in refined_rules), encoding="utf-8")
     refined_manifest = dict(source_manifest)
     refined_manifest["rules"] = refined_rules
     refined_manifest["refinement"] = {
@@ -208,38 +175,24 @@ def refine_rules(validation_path: Path, manifest_path: Path, coverage_path: Path
             "legacy_seclang_safe_regex": True,
             "wirefilter_textual_unicode_escapes": False,
             "backslash_character_class": False,
+            "preserve_or_infer_request_phase": True,
             "automatic_deployment": False,
         },
     }
-    manifest_out = output_dir / "manifest.json"
-    write_json(manifest_out, refined_manifest)
-
+    manifest_out = output_dir / "manifest.json"; write_json(manifest_out, refined_manifest)
     coverage_rows: list[dict[str, Any]] = []
     for row in validation_rows:
         key = str(row.get("stable_key") or "")
         coverage = coverage_by_key.get(key, {})
         if str(row.get("rule_id") or "") in refined_rule_ids and coverage:
             coverage_rows.append(coverage)
-
-    coverage_out = output_dir / "coverage.csv"
-    _write_csv(coverage_out, coverage_rows, COVERAGE_FIELDS)
-    coverage_jsonl_out = output_dir / "coverage.jsonl"
-    write_jsonl(coverage_jsonl_out, coverage_rows)
-
+    coverage_out = output_dir / "coverage.csv"; _write_csv(coverage_out, coverage_rows, COVERAGE_FIELDS)
+    coverage_jsonl_out = output_dir / "coverage.jsonl"; write_jsonl(coverage_jsonl_out, coverage_rows)
     changes_out = output_dir / "changes.csv"
-    _write_csv(
-        changes_out,
-        changes,
-        ["rule_id", "old_revision", "new_revision", "reason", "old_pattern", "new_pattern", "affected_payloads"],
-    )
-    changes_jsonl_out = output_dir / "changes.jsonl"
-    write_jsonl(changes_jsonl_out, changes)
-
-    unresolved_out = output_dir / "unresolved.csv"
-    _write_csv(unresolved_out, manual_rows, UNRESOLVED_FIELDS)
-    unresolved_jsonl_out = output_dir / "unresolved.jsonl"
-    write_jsonl(unresolved_jsonl_out, manual_rows)
-
+    _write_csv(changes_out, changes, ["rule_id", "old_revision", "new_revision", "reason", "old_pattern", "new_pattern", "affected_payloads"])
+    changes_jsonl_out = output_dir / "changes.jsonl"; write_jsonl(changes_jsonl_out, changes)
+    unresolved_out = output_dir / "unresolved.csv"; _write_csv(unresolved_out, manual_rows, UNRESOLVED_FIELDS)
+    unresolved_jsonl_out = output_dir / "unresolved.jsonl"; write_jsonl(unresolved_jsonl_out, manual_rows)
     counts = Counter(row["status"] for row in manual_rows)
     return {
         "still_bypassed": len(validation_rows),
