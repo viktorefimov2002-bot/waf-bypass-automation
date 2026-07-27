@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -55,20 +56,25 @@ def _prepare_replay_input(
     output_jsonl: Path,
     coverage_by_key: dict[str, dict[str, Any]],
     coverage_path: Path | None,
-) -> tuple[Path, dict[str, dict[str, Any]], int]:
+) -> tuple[Path, dict[str, dict[str, Any]], int, int]:
     confirmed = {
         stable_key(record): record
         for record in read_jsonl(before_path)
         if record.get("final_verdict") in CONFIRMED_BYPASS_VERDICTS
     }
     if not coverage_path:
-        return before_path, confirmed, 0
+        return before_path, confirmed, 0, len(confirmed)
 
     selected = [record for key, record in confirmed.items() if key in coverage_by_key]
     replay_input_path = output_jsonl.with_suffix(".eligible.jsonl")
     write_jsonl(replay_input_path, selected)
     skipped_without_candidate_rule = len(confirmed) - len(selected)
-    return replay_input_path, {stable_key(record): record for record in selected}, skipped_without_candidate_rule
+    return (
+        replay_input_path,
+        {stable_key(record): record for record in selected},
+        skipped_without_candidate_rule,
+        len(confirmed),
+    )
 
 
 def validate_fixes(
@@ -86,12 +92,26 @@ def validate_fixes(
     manifest_path: Path | None = None,
 ) -> dict[str, Any]:
     coverage_by_key, rules_by_id = _load_rule_metadata(coverage_path, manifest_path)
-    replay_input_path, before, skipped_without_candidate_rule = _prepare_replay_input(
+    replay_input_path, before, skipped_without_candidate_rule, confirmed_total = _prepare_replay_input(
         before_path, output_jsonl, coverage_by_key, coverage_path
     )
 
+    print(
+        f"validate-fix selection: confirmed={confirmed_total}, "
+        f"coverage_rows={len(coverage_by_key)}, eligible={len(before)}, "
+        f"skipped_without_rule={skipped_without_candidate_rule}",
+        file=sys.stderr,
+        flush=True,
+    )
+    if coverage_path and not before:
+        raise ValueError(
+            "No eligible confirmed bypasses matched coverage.csv. "
+            "Check that verified.jsonl and coverage.csv were generated from the same dataset and that "
+            "payload_path/variant values have not changed."
+        )
+
     replay_path = output_jsonl.with_suffix(".replayed.jsonl")
-    recheck_records(
+    replay_summary = recheck_records(
         replay_input_path,
         replay_path,
         group_id=group_id,
@@ -102,6 +122,10 @@ def validate_fixes(
         delay=delay,
         only_confirmed_bypasses=True,
     )
+    if replay_summary["selected"] == 0:
+        raise ValueError(
+            "Replay selection is empty after applying --group/--limit and confirmed-bypass filters."
+        )
 
     after = {stable_key(record): record for record in read_jsonl(replay_path)}
     rows: list[dict[str, Any]] = []
