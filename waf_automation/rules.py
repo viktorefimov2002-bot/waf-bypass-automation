@@ -105,14 +105,25 @@ SIGNATURES: dict[str, list[tuple[str, str]]] = {
         ("redirect_ipv6_literal", r"https?://\[(?:::ffff:)?[0-9a-f:.]+\]"),
         ("redirect_crlf_location", r"[\x0d\x0a]+[0-9]*location\s*:\s*https?://"),
     ],
-    "graphql": [
-        ("graphql_introspection", r"(?:__schema\b|__type\s*[(]|fragment\s+fulltype\s+on\s+__type)"),
-    ],
+    "graphql": [("graphql_introspection", r"(?:__schema\b|__type\s*[(]|fragment\s+fulltype\s+on\s+__type)")],
     "exposure": [
         ("exposed_vcs", r"^/[.]git(?:/|$)"),
         ("backup_archive", r"^/(?:[.]/)?(?:backup(?:/|[.])|backup/[^\s]{0,128}|[^/\s]*(?:backup|db)[^/\s]*[.](?:zip|gz|tgz|tar))(?:$|[?#])"),
         ("webshell_php_path", r"/(?:wso|do)[.]php(?:$|[;#.\x0a\x0d])"),
     ],
+}
+
+STEP_TO_TRANSFORM = {
+    "percent": "t:urlDecodeUni",
+    "base64": "t:base64DecodeExt",
+    "js_unicode": "t:jsDecode",
+    "html_entity": "t:htmlEntityDecode",
+    "remove_nulls": "t:removeNulls",
+}
+ENCODING_FALLBACK_TRANSFORM = {
+    "BASE64": "t:base64DecodeExt",
+    "UTF-16": "t:jsDecode",
+    "HTML-ENTITY": "t:htmlEntityDecode",
 }
 
 
@@ -135,13 +146,27 @@ def _select_signature(record: dict[str, Any]) -> tuple[str, str, str] | None:
     return None
 
 
-def _transforms(encoding: str, family: str) -> tuple[str, ...]:
-    result = ["t:none", "t:urlDecodeUni"]
-    if encoding == "BASE64": result.extend(["t:base64DecodeExt", "t:urlDecodeUni"])
-    if encoding == "UTF-16" or family == "xss": result.extend(["t:jsDecode", "t:urlDecodeUni"])
-    if family == "xss": result.extend(["t:htmlEntityDecode", "t:cssDecode", "t:urlDecodeUni"])
-    result.extend(["t:lowercase", "t:removeNulls"])
+def _normalization_steps(record: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(str(step).strip().lower() for step in (record.get("normalization_steps") or []) if str(step).strip())
+
+
+def _transforms(record: dict[str, Any]) -> tuple[str, ...]:
+    result = ["t:none"]
+    steps = _normalization_steps(record)
+    for step in steps:
+        transform = STEP_TO_TRANSFORM.get(step)
+        if transform:
+            result.append(transform)
+    if not steps:
+        fallback = ENCODING_FALLBACK_TRANSFORM.get(str(record.get("encoding", "NONE")).upper())
+        if fallback:
+            result.append(fallback)
+    result.append("t:lowercase")
     return tuple(result)
+
+
+def _phase_for_record(record: dict[str, Any]) -> int:
+    return 2 if str(record.get("zone", "")).upper() == "BODY" else 1
 
 
 def _header_names(record: dict[str, Any]) -> list[str]:
@@ -190,7 +215,7 @@ def _validate_pattern(pattern: str) -> None:
 
 
 def _render_rule(rule: dict[str, Any]) -> str:
-    actions = [f"id:{rule['rule_id']}", "phase:2", "deny", *rule["transforms"],
+    actions = [f"id:{rule['rule_id']}", f"phase:{rule['phase']}", "deny", *rule["transforms"],
                f"msg:'Candidate coverage for confirmed waf-bypass: {rule['primitive']}'",
                "tag:'waf-bypass-candidate'", "severity:'CRITICAL'", "setvar:tx.anomaly_score=+5"]
     action_lines = ",\\\n    ".join(actions)
@@ -199,7 +224,7 @@ def _render_rule(rule: dict[str, Any]) -> str:
         warning = ("# HIGH-RISK TARGET: REQUEST_HEADERS scans all request-header values. "
                    "This may increase false positives and per-request CPU cost; benchmark and tune before production.\n")
     return (
-        f"# Covers {rule['coverage_count']} confirmed bypass variant(s); targets={','.join(rule['targets'])}; encodings={','.join(rule['encodings'])}.\n"
+        f"# Covers {rule['coverage_count']} confirmed bypass variant(s); phase={rule['phase']}; targets={','.join(rule['targets'])}; encodings={','.join(rule['encodings'])}.\n"
         + warning
         + "# REVIEW REQUIRED: validate converter compatibility, coverage and false positives before production.\n"
         + f"SecRule {rule['target']} \"@rx {rule['pattern']}\" \\\n"
@@ -236,7 +261,6 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
     clusters: dict[tuple[Any, ...], list[dict[str, Any]]] = defaultdict(list)
     signatures: dict[str, tuple[str, str, str]] = {}
     skipped_rows: list[dict[str, Any]] = []
-
     for record in records:
         encoding = str(record.get("encoding", "NONE")).upper()
         if encoding not in SUPPORTED_ENCODINGS:
@@ -254,26 +278,28 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             skipped_rows.append(_skip_row(record, reason, detail, family)); continue
         family, primitive, pattern = signature
         _validate_pattern(pattern)
-        transforms = _transforms(encoding, family)
+        transforms = _transforms(record)
+        phase = _phase_for_record(record)
         signature_key = f"{family}|{primitive}|{pattern}"
         signatures[signature_key] = signature
         target_partition = target if encoding in SEPARATE_TARGET_ENCODINGS else "MERGED"
-        clusters[(record.get("group_id"), record.get("group_name"), signature_key, transforms, target_partition)].append(
+        clusters[(record.get("group_id"), record.get("group_name"), signature_key, transforms, phase, target_partition)].append(
             {**record, "_rule_target": target, "_generic_header_target": generic_header}
         )
-
     if not clusters: raise ValueError("Confirmed bypasses were found, but none matched a supported exploit primitive")
     rules: list[dict[str, Any]] = []; coverage_rows: list[dict[str, Any]] = []
     for offset, (key, covered) in enumerate(sorted(clusters.items(), key=lambda item: tuple(map(str, item[0])))):
-        group_id, group_name, signature_key, transforms, _ = key
+        group_id, group_name, signature_key, transforms, phase, _ = key
         family, primitive, pattern = signatures[signature_key]
         targets = _deduplicate_targets({str(r["_rule_target"]) for r in covered})
         encodings = sorted({str(r.get("encoding", "NONE")).upper() for r in covered})
+        step_profiles = sorted({">".join(_normalization_steps(r)) or "NONE" for r in covered})
         rule = {
             "rule_id": id_start + offset, "group_id": group_id, "group_name": group_name,
             "target": "|".join(targets), "targets": targets, "encodings": encodings,
             "family": family, "primitive": primitive, "pattern": pattern,
-            "transforms": list(transforms), "coverage_count": len(covered),
+            "transforms": list(transforms), "phase": phase, "normalization_step_profiles": step_profiles,
+            "coverage_count": len(covered),
             "generic_header_target": any(bool(r["_generic_header_target"]) for r in covered),
             "review_status": "REVIEW_REQUIRED", "coverage_status": "PROPOSED_NOT_VALIDATED",
         }
@@ -283,26 +309,25 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
                 "stable_key": stable_key(record), "payload_path": record["payload_path"], "variant": record["variant"],
                 "group_id": group_id, "rule_id": rule["rule_id"], "primitive": primitive,
                 "zone": record.get("zone"), "encoding": record.get("encoding"), "rule_target": rule["target"],
+                "phase": phase, "normalization_steps": ">".join(_normalization_steps(record)),
+                "transform_profile": ">".join(transforms),
                 "grouped_rule": len(covered) > 1, "generic_header_target": bool(record["_generic_header_target"]),
                 "normalized_payload": record.get("normalized_payload"),
             })
-
     output_dir.mkdir(parents=True, exist_ok=True)
     conf_path = output_dir / "candidate-rules.conf"
     conf_path.write_text(
         "# Auto-generated candidate SecLang rules. DO NOT auto-load.\n"
         "# Dynamic scanner headers may map to REQUEST_HEADERS; such rules have explicit FP/load warnings.\n"
+        "# Transform profiles follow recorded normalization_steps; request phase follows the payload zone.\n"
         "# Only recognized exploit primitives are emitted; fallback payload rules are skipped.\n\n"
         + "\n".join(_render_rule(rule) for rule in rules), encoding="utf-8")
-
-    coverage_fields = ["stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive", "zone", "encoding", "rule_target", "grouped_rule", "generic_header_target", "normalized_payload"]
+    coverage_fields = ["stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive", "zone", "encoding", "rule_target", "phase", "normalization_steps", "transform_profile", "grouped_rule", "generic_header_target", "normalized_payload"]
     coverage_path = output_dir / "coverage.csv"; _write_csv(coverage_path, coverage_rows, coverage_fields)
     coverage_jsonl_path = output_dir / "coverage.jsonl"; write_jsonl(coverage_jsonl_path, coverage_rows)
-
     skipped_fields = ["stable_key", "payload_path", "variant", "group_id", "category", "family", "zone", "encoding", "payload_component", "payload_name", "normalization_complete", "normalization_steps", "reason", "detail", "invisible_codepoints", "normalized_payload_preview"]
     skipped_path = output_dir / "skipped.csv"; _write_csv(skipped_path, skipped_rows, skipped_fields)
     skipped_jsonl_path = output_dir / "skipped.jsonl"; write_jsonl(skipped_jsonl_path, skipped_rows)
-
     grouped_rules = sum(rule["coverage_count"] > 1 for rule in rules)
     covered_variants = len(coverage_rows)
     reason_counts = dict(sorted(Counter(row["reason"] for row in skipped_rows).items()))
@@ -319,6 +344,7 @@ def suggest_rules(input_path: Path, output_dir: Path, id_start: int) -> dict[str
             "iterative_transport_decoding": True, "args_name_targeting": True,
             "zero_width_sql_patterns": True, "csv_and_jsonl_indexes": True,
             "skipped_payload_revision": True, "quoted_fragment_patterns": True,
+            "normalization_trace_driven_transforms": True, "phase_selected_by_request_zone": True,
         }, "rules": rules,
     })
     if covered_variants + len(skipped_rows) != len(records): raise RuntimeError("Each confirmed bypass must be covered or explicitly skipped")

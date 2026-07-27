@@ -13,10 +13,7 @@ from waf_automation.rules import suggest_rules
 
 class PayloadNormalizationTests(unittest.TestCase):
     def test_args_without_structural_name_preserves_raw_query(self) -> None:
-        command = (
-            "curl -X GET 'https://example.test/"
-            "?admin%2A%29%28%28%7Cuserpassword%3D%2A%29'"
-        )
+        command = "curl -X GET 'https://example.test/?admin%2A%29%28%28%7Cuserpassword%3D%2A%29'"
         details = extract_payload_details(extract_request(command), "ARGS")
         self.assertEqual(details["component"], "ARG_NAME")
         self.assertEqual(details["value"], "admin%2A%29%28%28%7Cuserpassword%3D%2A%29")
@@ -37,10 +34,7 @@ class PayloadNormalizationTests(unittest.TestCase):
         details = extract_payload_details(extract_request(command), "COOKIE")
         self.assertEqual(details["component"], "COOKIE_VALUE")
         self.assertEqual(details["name"], "WBC-2269fa")
-        self.assertEqual(
-            details["value"],
-            "Li4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Y2Jvb3QuaW5p",
-        )
+        self.assertEqual(details["value"], "Li4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Yy4uJTVjLi4lNWMuLiU1Y2Jvb3QuaW5p")
         result = normalize_payload_details(details["value"], "BASE64")
         self.assertEqual(result["value"], r"..\..\..\..\..\..\..\..\boot.ini")
         self.assertEqual(result["steps"], ["base64", "percent"])
@@ -81,10 +75,7 @@ class PayloadNormalizationTests(unittest.TestCase):
                 "additional_groups": [{"id": 50, "name": "LDAP", "source": "local"}],
                 "category_defaults": {"LDAP": 50},
             }), encoding="utf-8")
-            command = (
-                "curl -X GET 'https://example.test/"
-                "?YWRtaW4lMkElMjklMjglMjglN0N1c2VycGFzc3dvcmQlM0QlMkElMjk='"
-            )
+            command = "curl -X GET 'https://example.test/?YWRtaW4lMkElMjklMjglMjglN0N1c2VycGFzc3dvcmQlM0QlMkElMjk='"
             report = root / "report.json"
             report.write_text(json.dumps({
                 "TARGET": "https://example.test/",
@@ -92,7 +83,6 @@ class PayloadNormalizationTests(unittest.TestCase):
                 "BYPASSED": {"LDAP/14.json": {"ARGS:BASE64": "200 RESPONSE CODE"}},
                 "cURL": {"BYPASSED": {"LDAP/14.json": {"ARGS:BASE64": command}}},
             }), encoding="utf-8")
-
             imported_path = root / "imported.jsonl"
             import_report(report, groups, imported_path, taxonomy, None)
             record = read_jsonl(imported_path)[0]
@@ -100,7 +90,6 @@ class PayloadNormalizationTests(unittest.TestCase):
             self.assertEqual(record["normalized_payload"], "admin*)((|userpassword=*)")
             self.assertEqual(record["normalization_steps"], ["base64", "percent"])
             self.assertGreaterEqual(len(record["normalization_layers"]), 3)
-
             record["final_verdict"] = "BYPASS_CONFIRMED"
             verified_path = root / "verified.jsonl"
             write_jsonl(verified_path, [record])
@@ -109,7 +98,9 @@ class PayloadNormalizationTests(unittest.TestCase):
             rule_text = (rules_dir / "candidate-rules.conf").read_text(encoding="utf-8")
             self.assertIn("SecRule ARGS_NAMES", rule_text)
             self.assertIn("t:base64DecodeExt", rule_text)
-            self.assertGreaterEqual(rule_text.count("t:urlDecodeUni"), 2)
+            self.assertEqual(rule_text.count("t:urlDecodeUni"), 1)
+            self.assertLess(rule_text.index("t:base64DecodeExt"), rule_text.index("t:urlDecodeUni"))
+            self.assertIn("phase:1", rule_text)
 
     def test_import_cookie_records_name_and_normalized_value(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
