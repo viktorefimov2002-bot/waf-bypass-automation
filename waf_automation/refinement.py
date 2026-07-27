@@ -15,9 +15,7 @@ COVERAGE_FIELDS = [
     "zone", "encoding", "rule_target", "phase", "normalization_steps", "transform_profile",
     "grouped_rule", "generic_header_target", "normalized_payload",
 ]
-UNRESOLVED_FIELDS = [
-    "stable_key", "rule_id", "status", "reason", "primitive", "encoding", "curl",
-]
+UNRESOLVED_FIELDS = ["stable_key", "rule_id", "status", "reason", "primitive", "encoding", "curl"]
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> None:
@@ -30,8 +28,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) ->
 
 def _load_manifest(path: Path) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
     document = json.loads(path.read_text(encoding="utf-8"))
-    rules = {str(rule.get("rule_id")): dict(rule) for rule in document.get("rules", [])}
-    return document, rules
+    return document, {str(rule.get("rule_id")): dict(rule) for rule in document.get("rules", [])}
 
 
 def _load_coverage(path: Path) -> dict[str, dict[str, Any]]:
@@ -65,7 +62,7 @@ def _encoded_fallback(row: dict[str, Any], rule: dict[str, Any]) -> tuple[str | 
 
 def _validate_refined_pattern(pattern: str) -> None:
     _validate_pattern(pattern)
-    if re.search(r"\u[0-9a-fA-F]{4,8}", pattern):
+    if re.search(r"\\u[0-9a-fA-F]{4,8}", pattern):
         raise ValueError(f"Textual Unicode regex escape is not wirefilter-compatible: {pattern}")
     if "[\\]" in pattern:
         raise ValueError(f"Backslash-only character class is not legacy-compatible: {pattern}")
@@ -99,8 +96,7 @@ def refine_rules(validation_path: Path, manifest_path: Path, coverage_path: Path
     manual_rows: list[dict[str, Any]] = []
     for row in validation_rows:
         rule_id = str(row.get("rule_id") or "")
-        stable_key = str(row.get("stable_key") or "")
-        coverage = coverage_by_key.get(stable_key)
+        coverage = coverage_by_key.get(str(row.get("stable_key") or ""))
         if not rule_id or rule_id not in rules_by_id:
             manual_rows.append(_manual_row(row, "MANUAL_REVIEW_REQUIRED", "MISSING_RULE_MAPPING", rule_id)); continue
         if not coverage or str(coverage.get("rule_id") or "") != rule_id:
@@ -119,7 +115,8 @@ def refine_rules(validation_path: Path, manifest_path: Path, coverage_path: Path
         for row in rows:
             proposal, reason = _encoded_fallback(row, old_rule)
             if proposal:
-                proposals.append(proposal); reasons.append(reason)
+                proposals.append(proposal)
+                reasons.append(reason)
         unique = list(dict.fromkeys(proposals))
         if len(unique) != 1:
             for row in rows:
@@ -179,11 +176,11 @@ def refine_rules(validation_path: Path, manifest_path: Path, coverage_path: Path
             "automatic_deployment": False,
         },
     }
-    manifest_out = output_dir / "manifest.json"; write_json(manifest_out, refined_manifest)
+    manifest_out = output_dir / "manifest.json"
+    write_json(manifest_out, refined_manifest)
     coverage_rows: list[dict[str, Any]] = []
     for row in validation_rows:
-        key = str(row.get("stable_key") or "")
-        coverage = coverage_by_key.get(key, {})
+        coverage = coverage_by_key.get(str(row.get("stable_key") or ""), {})
         if str(row.get("rule_id") or "") in refined_rule_ids and coverage:
             coverage_rows.append(coverage)
     coverage_out = output_dir / "coverage.csv"; _write_csv(coverage_out, coverage_rows, COVERAGE_FIELDS)
