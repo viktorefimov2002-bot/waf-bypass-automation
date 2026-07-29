@@ -131,10 +131,8 @@ class ToolTests(unittest.TestCase):
             merged_rules = [rule for rule in manifest["rules"] if len(rule["targets"]) > 1]
             self.assertEqual(len(merged_rules), 1)
             self.assertEqual(merged_rules[0]["targets"], ["ARGS", "REQUEST_COOKIES"])
-            self.assertEqual(
-                len({tuple(rule["transforms"]) for rule in manifest["rules"]}),
-                3,
-            )
+            single_targets = sorted(rule["target"] for rule in manifest["rules"] if len(rule["targets"]) == 1)
+            self.assertEqual(single_targets, ["ARGS", "REQUEST_HEADERS:Referer"])
             policy = manifest["generation_policy"]
             self.assertFalse(policy["encoded_targets_remain_separate"])
             self.assertTrue(policy["encoded_targets_merge_when_transform_profiles_match"])
