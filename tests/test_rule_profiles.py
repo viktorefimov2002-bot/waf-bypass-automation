@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 from waf_automation.common import write_jsonl
+from waf_automation.rule_phase import phase_for_target, phase_for_targets
 from waf_automation.rules import _phase_for_record, _transforms, suggest_rules
 
 
@@ -45,12 +46,17 @@ class RuleProfileTests(unittest.TestCase):
             ("t:none", "t:lowercase"),
         )
 
-    def test_phase_is_selected_from_request_zone(self) -> None:
-        for zone in ("URL", "ARGS", "COOKIE", "HEADER", "USER-AGENT", "REFERER"):
+    def test_phase_is_selected_from_actual_target_availability(self) -> None:
+        for zone in ("URL", "COOKIE", "HEADER", "USER-AGENT", "REFERER"):
             self.assertEqual(_phase_for_record({"zone": zone}), 1)
+        self.assertEqual(_phase_for_record({"zone": "ARGS"}), 2)
         self.assertEqual(_phase_for_record({"zone": "BODY"}), 2)
+        self.assertEqual(phase_for_target("REQUEST_HEADERS:Referer"), 1)
+        self.assertEqual(phase_for_target("REQUEST_URI"), 1)
+        self.assertEqual(phase_for_target("ARGS_NAMES"), 2)
+        self.assertEqual(phase_for_targets(["REQUEST_HEADERS", "ARGS"]), 2)
 
-    def test_generation_splits_phase_and_exports_profile_metadata(self) -> None:
+    def test_generation_uses_phase_two_for_args_and_body(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             base = {
@@ -75,20 +81,20 @@ class RuleProfileTests(unittest.TestCase):
             self.assertEqual(summary["candidate_rules"], 2)
 
             rule_text = (output_dir / "candidate-rules.conf").read_text(encoding="utf-8")
-            self.assertIn("phase:1", rule_text)
+            self.assertNotIn("phase:1", rule_text)
             self.assertIn("phase:2", rule_text)
             self.assertNotIn("t:jsDecode", rule_text)
             self.assertNotIn("t:htmlEntityDecode", rule_text)
             self.assertNotIn("t:cssDecode", rule_text)
 
             manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual({rule["phase"] for rule in manifest["rules"]}, {1, 2})
+            self.assertEqual({rule["phase"] for rule in manifest["rules"]}, {2})
             self.assertTrue(manifest["generation_policy"]["normalization_trace_driven_transforms"])
-            self.assertTrue(manifest["generation_policy"]["phase_selected_by_request_zone"])
+            self.assertTrue(manifest["generation_policy"]["phase_selected_by_target_availability"])
 
             with (output_dir / "coverage.csv").open(encoding="utf-8") as handle:
                 coverage = list(csv.DictReader(handle))
-            self.assertEqual({row["phase"] for row in coverage}, {"1", "2"})
+            self.assertEqual({row["phase"] for row in coverage}, {"2"})
             self.assertTrue(all(row["normalization_steps"] == "percent" for row in coverage))
             self.assertTrue(all("t:urlDecodeUni" in row["transform_profile"] for row in coverage))
 
