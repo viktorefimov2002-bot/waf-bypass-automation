@@ -11,11 +11,11 @@ def apply_rule_dedup(rules_module: Any) -> None:
 
     def _partition(rule: dict[str, Any]) -> str:
         target = str(rule["target"])
-        # Encoding is intentionally not part of the target partition. Exact ordered
-        # transforms are already included in the semantic key, so BASE64/UTF-16
-        # rules can safely share a target union only when decoding behavior matches.
-        if target == "REQUEST_HEADERS":
-            return "generic-request-headers"
+        # Exact ordered transforms and phase are already part of the semantic key.
+        # Generic REQUEST_HEADERS can therefore share a target union with ARGS,
+        # cookies, URI and other ordinary collections when behavior is identical.
+        # Named headers remain separate so a broad header collection never silently
+        # subsumes a deliberately scoped REQUEST_HEADERS:<Name> rule.
         if target.startswith("REQUEST_HEADERS:"):
             return "specific-request-headers"
         return "mergeable-targets"
@@ -125,6 +125,7 @@ def apply_rule_dedup(rules_module: Any) -> None:
                 "targets_merged_only_for_identical_semantics": True,
                 "encoded_targets_remain_separate": False,
                 "encoded_targets_merge_when_transform_profiles_match": True,
+                "generic_request_headers_merge_with_ordinary_targets": True,
                 "generic_and_specific_headers_remain_separate": True,
             }
         )
