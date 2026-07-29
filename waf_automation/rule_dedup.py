@@ -11,9 +11,9 @@ def apply_rule_dedup(rules_module: Any) -> None:
 
     def _partition(rule: dict[str, Any]) -> str:
         target = str(rule["target"])
-        encodings = {str(value).upper() for value in rule.get("encodings", [])}
-        if encodings & rules_module.SEPARATE_TARGET_ENCODINGS:
-            return f"encoded:{target}"
+        # Encoding is intentionally not part of the target partition. Exact ordered
+        # transforms are already included in the semantic key, so BASE64/UTF-16
+        # rules can safely share a target union only when decoding behavior matches.
         if target == "REQUEST_HEADERS":
             return "generic-request-headers"
         if target.startswith("REQUEST_HEADERS:"):
@@ -88,13 +88,12 @@ def apply_rule_dedup(rules_module: Any) -> None:
         coverage_jsonl_path = Path(summary["coverage_jsonl"])
         coverage_rows = rules_module.read_jsonl(coverage_jsonl_path)
         rule_targets = {int(rule["rule_id"]): rule["target"] for rule in deduplicated}
+        grouped_by_id = {int(rule["rule_id"]): int(rule["coverage_count"]) > 1 for rule in deduplicated}
         for row in coverage_rows:
             new_id = old_to_new[int(row["rule_id"])]
             row["rule_id"] = new_id
             row["rule_target"] = rule_targets[new_id]
-            row["grouped_rule"] = next(
-                int(rule["coverage_count"]) > 1 for rule in deduplicated if int(rule["rule_id"]) == new_id
-            )
+            row["grouped_rule"] = grouped_by_id[new_id]
 
         coverage_fields = [
             "stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive",
@@ -124,7 +123,8 @@ def apply_rule_dedup(rules_module: Any) -> None:
                 "semantic_rule_deduplication": True,
                 "payload_group_provenance_preserved": True,
                 "targets_merged_only_for_identical_semantics": True,
-                "encoded_targets_remain_separate": True,
+                "encoded_targets_remain_separate": False,
+                "encoded_targets_merge_when_transform_profiles_match": True,
                 "generic_and_specific_headers_remain_separate": True,
             }
         )
