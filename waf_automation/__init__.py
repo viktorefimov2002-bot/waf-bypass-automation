@@ -2,11 +2,13 @@
 
 __version__ = "0.1.0"
 
-# Keep the main rule generator compact while allowing reviewed primitive packs
-# and output metadata to extend it during package initialization.
+# Keep the main rule generator compact while allowing reviewed primitive packs,
+# output metadata and semantic clustering to extend it during package initialization.
 from . import rules as _rules
 from .extra_primitives import apply_extra_primitives as _apply_extra_primitives
 from .rule_metadata import apply_rule_metadata as _apply_rule_metadata
+from .semantic_dedup import apply_semantic_dedup as _apply_semantic_dedup
 
 _apply_extra_primitives(_rules.SIGNATURES)
 _apply_rule_metadata(_rules)
+_apply_semantic_dedup(_rules)
