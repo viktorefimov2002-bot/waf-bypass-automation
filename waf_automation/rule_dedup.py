@@ -6,16 +6,11 @@ from typing import Any
 
 
 def apply_rule_dedup(rules_module: Any) -> None:
-    """Post-process generated rules, merging only semantically identical safe targets."""
+    """Post-process generated rules, merging semantically identical safe targets."""
     base_suggest_rules = rules_module.suggest_rules
 
     def _partition(rule: dict[str, Any]) -> str:
         target = str(rule["target"])
-        # Exact ordered transforms and phase are already part of the semantic key.
-        # Generic REQUEST_HEADERS can therefore share a target union with ARGS,
-        # cookies, URI and other ordinary collections when behavior is identical.
-        # Named headers remain separate so a broad header collection never silently
-        # subsumes a deliberately scoped REQUEST_HEADERS:<Name> rule.
         if target.startswith("REQUEST_HEADERS:"):
             return "specific-request-headers"
         return "mergeable-targets"
@@ -33,7 +28,6 @@ def apply_rule_dedup(rules_module: Any) -> None:
                 rule["primitive"],
                 rule["pattern"],
                 tuple(rule["transforms"]),
-                int(rule["phase"]),
                 _partition(rule),
             )
             clusters[key].append(rule)
@@ -47,6 +41,7 @@ def apply_rule_dedup(rules_module: Any) -> None:
             targets = rules_module._deduplicate_targets(
                 {target for member in members for target in member.get("targets", [member["target"]])}
             )
+            phase = rules_module.phase_for_targets(targets)
             source_group_ids = sorted(
                 {
                     str(group_id)
@@ -73,6 +68,7 @@ def apply_rule_dedup(rules_module: Any) -> None:
                 "source_group_names": source_group_names,
                 "target": "|".join(targets),
                 "targets": targets,
+                "phase": phase,
                 "encodings": sorted({encoding for member in members for encoding in member.get("encodings", [])}),
                 "normalization_step_profiles": sorted(
                     {profile for member in members for profile in member.get("normalization_step_profiles", [])}
@@ -87,13 +83,14 @@ def apply_rule_dedup(rules_module: Any) -> None:
         coverage_path = Path(summary["coverage"])
         coverage_jsonl_path = Path(summary["coverage_jsonl"])
         coverage_rows = rules_module.read_jsonl(coverage_jsonl_path)
-        rule_targets = {int(rule["rule_id"]): rule["target"] for rule in deduplicated}
-        grouped_by_id = {int(rule["rule_id"]): int(rule["coverage_count"]) > 1 for rule in deduplicated}
+        rules_by_id = {int(rule["rule_id"]): rule for rule in deduplicated}
         for row in coverage_rows:
             new_id = old_to_new[int(row["rule_id"])]
+            merged_rule = rules_by_id[new_id]
             row["rule_id"] = new_id
-            row["rule_target"] = rule_targets[new_id]
-            row["grouped_rule"] = grouped_by_id[new_id]
+            row["rule_target"] = merged_rule["target"]
+            row["phase"] = merged_rule["phase"]
+            row["grouped_rule"] = int(merged_rule["coverage_count"]) > 1
 
         coverage_fields = [
             "stable_key", "payload_path", "variant", "group_id", "rule_id", "primitive",
@@ -107,7 +104,7 @@ def apply_rule_dedup(rules_module: Any) -> None:
         conf_path.write_text(
             "# Auto-generated candidate SecLang rules. DO NOT auto-load.\n"
             "# Dynamic scanner headers may map to REQUEST_HEADERS; such rules have explicit FP/load warnings.\n"
-            "# Transform profiles follow recorded normalization_steps; request phase follows the payload zone.\n"
+            "# Transform profiles follow recorded normalization_steps; phase follows the latest required target.\n"
             "# Semantically identical rules are deduplicated across payload groups and safe target partitions.\n"
             "# Only recognized exploit primitives are emitted; fallback payload rules are skipped.\n\n"
             + "\n".join(rules_module._render_rule(rule) for rule in deduplicated),
@@ -127,6 +124,8 @@ def apply_rule_dedup(rules_module: Any) -> None:
                 "encoded_targets_merge_when_transform_profiles_match": True,
                 "generic_request_headers_merge_with_ordinary_targets": True,
                 "generic_and_specific_headers_remain_separate": True,
+                "phase_selected_by_target_availability": True,
+                "merged_rule_uses_maximum_required_phase": True,
             }
         )
         rules_module.write_json(manifest_path, manifest)
