@@ -108,7 +108,7 @@ class ToolTests(unittest.TestCase):
             self.assertNotIn("(?i)", rule_text)
             self.assertNotIn("capture", rule_text)
 
-    def test_base64_and_utf16_rules_are_split_by_target(self) -> None:
+    def test_encoded_rules_merge_only_when_transform_profiles_match(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             base = {
@@ -126,10 +126,16 @@ class ToolTests(unittest.TestCase):
             write_jsonl(checked, records)
             output_dir = root / "rules"
             summary = suggest_rules(checked, output_dir, 990000)
-            self.assertEqual(summary["candidate_rules"], 4)
+            self.assertEqual(summary["candidate_rules"], 3)
             manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
-            self.assertTrue(all(len(rule["targets"]) == 1 for rule in manifest["rules"]))
-            self.assertEqual(manifest["generation_policy"]["split_targets_for_encodings"], ["BASE64", "UTF-16"])
+            merged_rules = [rule for rule in manifest["rules"] if len(rule["targets"]) > 1]
+            self.assertEqual(len(merged_rules), 1)
+            self.assertEqual(merged_rules[0]["targets"], ["ARGS", "REQUEST_COOKIES"])
+            single_targets = sorted(rule["target"] for rule in manifest["rules"] if len(rule["targets"]) == 1)
+            self.assertEqual(single_targets, ["ARGS", "REQUEST_HEADERS:Referer"])
+            policy = manifest["generation_policy"]
+            self.assertFalse(policy["encoded_targets_remain_separate"])
+            self.assertTrue(policy["encoded_targets_merge_when_transform_profiles_match"])
 
     def test_stable_and_dynamic_headers_are_covered(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
