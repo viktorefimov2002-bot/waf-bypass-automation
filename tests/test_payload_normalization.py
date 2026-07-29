@@ -100,7 +100,7 @@ class PayloadNormalizationTests(unittest.TestCase):
             self.assertIn("t:base64DecodeExt", rule_text)
             self.assertEqual(rule_text.count("t:urlDecodeUni"), 1)
             self.assertLess(rule_text.index("t:base64DecodeExt"), rule_text.index("t:urlDecodeUni"))
-            self.assertIn("phase:1", rule_text)
+            self.assertIn("phase:2", rule_text)
 
     def test_import_cookie_records_name_and_normalized_value(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
