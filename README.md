@@ -1,25 +1,13 @@
 # waf-bypass automation
 
-CLI-инструмент для нормализации результатов `nemesida-waf/waf-bypass`, безопасного replay запросов, корреляции с WAF security logs и подготовки нейтрального evidence corpus для `waf-rule-engineering`.
+CLI-инструмент для обработки JSON-отчётов `nemesida-waf/waf-bypass`, повторной проверки найденных bypass, корреляции replay с WAF security log и подготовки нейтрального evidence corpus для `waf-rule-engineering`.
 
-Основной принцип текущей архитектуры:
-
-```text
-scanner corpus
-    -> import
-    -> verify/replay
-    -> correlate-logs
-    -> diagnose
-    -> export-corpus
-    -> waf-rule-engineering
-```
-
-`waf-bypass-automation` отвечает за запросы, replay, telemetry correlation и diagnosis. YAML DSL и финальная логика WAF-правил остаются зоной ответственности `waf-rule-engineering`.
+Инструмент не должен автоматически менять YAML-правила или повышать score. Источник истины для DSL-specific rule design остаётся в `waf-rule-engineering`.
 
 ## Требования
 
 - Python 3.11+
-- `curl`
+- установленный `curl`
 - зависимости из `requirements.txt`
 
 ```bash
@@ -28,13 +16,15 @@ python3 -m venv .venv
 pip install -r requirements.txt
 ```
 
-Запуск:
+Запуск из корня проекта:
 
 ```bash
 python waf_bypass_tool.py --help
 ```
 
-## 1. Import
+## Основной рабочий процесс
+
+### 1. Импорт
 
 ```bash
 python waf_bypass_tool.py import \
@@ -44,137 +34,62 @@ python waf_bypass_tool.py import \
   --output work/imported.jsonl
 ```
 
-Импортируются `BYPASSED` и `cURL.BYPASSED`. Каждый вариант запроса становится отдельной JSONL-записью.
+Каждый вариант запроса сохраняется отдельной JSONL-записью. `case_id` стабилен для одного импортированного request variant.
 
-Для каждого testcase формируется стабильный `case_id`, который сохраняется между повторными replay одного и того же варианта.
-
-## 2. Verify / replay
-
-Реальная отправка запросов выполняется только с `--execute`:
+### 2. Replay / verify
 
 ```bash
 python waf_bypass_tool.py verify \
   --input work/imported.jsonl \
   --execute \
   --allow-host jutcy.glazapp.com \
-  --timeout 15 \
-  --delay 0.2 \
-  --output work/verified.jsonl \
-  --report-xlsx work/verified.xlsx
+  --output work/verified.jsonl
 ```
 
-Без `--execute` выполняется dry-run, и запросы не отправляются.
+Без `--execute` выполняется dry-run.
 
-`recheck` сохранён как deprecated alias команды `verify`.
+При реальном replay утилита:
 
-### Correlation ID
+- запускает `curl` через `subprocess`, `shell=False`;
+- добавляет `x-waf-fp-test-id: <test_id>`;
+- автоматически добавляет `--globoff`, чтобы payload с буквальными `[`/`]` не ломал cURL URL parsing;
+- не следует redirects;
+- запрещает опасные/неизвестные cURL options и чтение локальных `@file`;
+- сохраняет `remote_ip`, `local_ip`, `url_effective`.
 
-Каждый реальный replay получает:
+Чтобы повторить только ранее упавшие replay:
 
-- `replay_run_id` — ID всего запуска;
-- `test_id` — ID конкретного HTTP-запроса.
-
-Во время выполнения cURL добавляется:
-
-```text
-waf-fp-test-id: <test_id>
+```bash
+python waf_bypass_tool.py verify \
+  --input work/verified.jsonl \
+  --only-verdict CHECK_ERROR \
+  --execute \
+  --allow-host jutcy.glazapp.com \
+  --output work/retried-check-errors.jsonl
 ```
 
-Исходный cURL в corpus при этом не переписывается.
+`--only-verdict` можно повторять для нескольких prior verdict values.
 
-### Безопасность replay
+### Replay response semantics
 
-- `subprocess` используется с `shell=False`;
-- локальные `@file` запрещены;
-- неизвестные cURL options блокируются;
-- redirects запрещены;
-- требуется точный `--allow-host` при `--execute`;
-- исходные URL, методы, headers и body не переписываются, кроме runtime correlation header.
+Response headers используются только как HTTP/route evidence.
 
-## HTTP response semantics
+- `Server: nginx/...Ubuntu` → `ORIGIN_CONFIRMED`;
+- пустой `Server` → `NO_ORIGIN_SIGNATURE`;
+- никакого `WAF_CONFIRMED` по заголовкам нет.
 
-Response headers используются только как клиентское/маршрутное наблюдение. Они больше не считаются источником истины о решении WAF.
+Новые replay verdicts:
 
-Для текущего стенда origin определяется по:
+- `BYPASS_CONFIRMED`;
+- `BYPASS_UNCONFIRMED`;
+- `HTTP_BLOCK_OBSERVED`;
+- `ORIGIN_BLOCK_RESPONSE`;
+- `CHECK_ERROR`;
+- `DRY_RUN`.
 
-```text
-Server: nginx/1.24.0 (Ubuntu)
-```
+`BLOCKED_BY_WAF` читается только для обратной совместимости со старыми артефактами. Факт WAF block подтверждается security log.
 
-Маршрутные статусы:
-
-| Наблюдение | `route_verdict` |
-|---|---|
-| `Server` содержит `nginx` или `Ubuntu` | `ORIGIN_CONFIRMED` |
-| `Server` отсутствует | `NO_ORIGIN_SIGNATURE` |
-| присутствует другой `Server` | `ROUTE_OTHER` |
-| replay завершился ошибкой | `ROUTE_UNCONFIRMED` |
-
-Важно: отсутствие `Server` **не означает автоматически**, что запрос заблокировал WAF.
-
-Итоговые replay verdicts:
-
-| HTTP/маршрут | `final_verdict` |
-|---|---|
-| non-block code + origin signature | `BYPASS_CONFIRMED` |
-| non-block code без origin signature | `BYPASS_UNCONFIRMED` |
-| block code без origin signature | `HTTP_BLOCK_OBSERVED` |
-| block code + origin signature | `ORIGIN_BLOCK_RESPONSE` |
-| ошибка cURL / нет HTTP status | `CHECK_ERROR` |
-| запуск без `--execute` | `DRY_RUN` |
-
-`BLOCKED_BY_WAF` больше не создаётся новыми replay. Значение поддерживается только для чтения старых артефактов.
-
-Коды блокировки берутся из `BLOCK-CODE` исходного отчёта и не обязаны быть равны 403.
-
-### Route diagnostics
-
-В real replay дополнительно сохраняются:
-
-```text
-remote_ip
-local_ip
-url_effective
-```
-
-Это позволяет быстро отличать проблемы replay от DNS/proxy/IPv4/IPv6/маршрутизации.
-
-## 3. Security-log correlation
-
-Security log является источником истины для WAF decision.
-
-Рекомендуемый набор полей:
-
-```text
-test_id
-rule_details
-runtime_anomaly_threshold
-anomaly_score
-runtime_blocking_mode
-verdict
-decision_source
-client_status
-origin_status
-phase_terminated
-request_host
-request_uri_redacted
-method
-path_template
-content_type_detected
-```
-
-Опционально:
-
-```text
-rule_numbers
-scores
-vendors
-x_waf_request_id
-```
-
-Рекомендуется экспортировать ClickHouse данные в JSONEachRow/JSONL и выбирать строки по `test_id` или `replay_run_id`, а не по HTTP-коду.
-
-Корреляция:
+### 3. Correlate security log
 
 ```bash
 python waf_bypass_tool.py correlate-logs \
@@ -186,19 +101,12 @@ python waf_bypass_tool.py correlate-logs \
 Primary join:
 
 ```text
-verified.jsonl.test_id == security_log.test_id
+verified.test_id == security_log.test_id
 ```
 
-Поддерживаемые correlation statuses:
+Не используется fuzzy correlation по URI/payload/status.
 
-- `MATCHED`
-- `LOG_NOT_FOUND`
-- `MISSING_REPLAY_TEST_ID`
-- `MULTIPLE_LOG_MATCHES`
-
-Duplicate `test_id` не разрешаются автоматически.
-
-## 4. Diagnosis
+### 4. Diagnose
 
 ```bash
 python waf_bypass_tool.py diagnose \
@@ -206,104 +114,107 @@ python waf_bypass_tool.py diagnose \
   --output work/diagnosed.jsonl
 ```
 
+Security log является источником истины для WAF decision.
+
 Основные diagnosis classes:
 
-- `BLOCKED` — security log подтверждает WAF block;
-- `BLOCKED_OTHER_SOURCE` — block есть, но `RuleEngine` не является decision source;
-- `WOULD_BLOCK` — threshold достигнут, но policy/mode не применил block;
-- `SCORING_GAP` — детекторы сработали, но score ниже threshold;
-- `DETECTION_GAP` — anomaly score = 0 и matched rules отсутствуют;
+- `BLOCKED`;
+- `BLOCKED_OTHER_SOURCE`;
+- `WOULD_BLOCK`;
+- `SCORING_GAP`;
+- `DETECTION_GAP`;
 - `LOG_NOT_FOUND`;
 - `CHECK_ERROR`;
 - `NEEDS_REVIEW`.
 
-Примеры:
+`SCORING_GAP` — coarse observation-level label: сам по себе он не означает, что score найденного rule надо повышать.
 
-```text
-HTTP 403 + Server отсутствует + security verdict Block
-    -> BLOCKED
+### 5. Analyze related variants
 
-HTTP 403 + Server отсутствует + security verdict Allow + anomaly_score 0
-    -> DETECTION_GAP
+Перед изменением YAML rules/scoring запускается сравнительный анализ:
 
-HTTP 200 + nginx + anomaly_score 5 / threshold 7
-    -> SCORING_GAP
-
-HTTP 200 + nginx + security verdict Block
-    -> NEEDS_REVIEW
+```bash
+python waf_bypass_tool.py analyze-gaps \
+  --input work/diagnosed.jsonl \
+  --output-dir work/gap-analysis
 ```
 
-То есть HTTP 403 сам по себе больше не считается доказательством успешной блокировки WAF.
+Кластеризация идёт по `payload_path`, поэтому ARGS/BODY/COOKIE/HEADER и разные encoding одного logical payload рассматриваются вместе.
 
-## 5. Export corpus to waf-rule-engineering
+Основные flags:
+
+- `NORMALIZATION_GAP_CANDIDATE`;
+- `TARGET_GAP_CANDIDATE`;
+- `PARTIAL_DETECTION_CANDIDATE`;
+- `SCORING_REVIEW_CANDIDATE`;
+- `PURE_DETECTION_GAP`;
+- `REPLAY_ERROR_PRESENT`.
+
+Важно: normalization/target/scoring labels являются **candidate evidence**, а не автоматическим root-cause verdict. Для настоящего scoring-only gap требуется rule metadata, подтверждающая релевантность matched rule конкретному attack primitive.
+
+Output:
+
+```text
+work/gap-analysis/
+  clusters.jsonl
+  cases.jsonl
+  manifest.json
+  normalization-gap-candidates.jsonl
+  target-gap-candidates.jsonl
+  pure-detection-gap-clusters.jsonl
+  partial-detection-candidates.jsonl
+  scoring-review-candidates.jsonl
+  replay-error-clusters.jsonl
+```
+
+### 6. Handoff в waf-rule-engineering
+
+После `analyze-gaps` рекомендуется экспортировать enriched cases:
 
 ```bash
 python waf_bypass_tool.py export-corpus \
-  --input work/diagnosed.jsonl \
+  --input work/gap-analysis/cases.jsonl \
   --output-dir work/rule-engineering-corpus
 ```
 
-По умолчанию экспортируются:
+Default export содержит `DETECTION_GAP` и `SCORING_GAP`, но если `gap_analysis` присутствует, его `primary_workstream` имеет приоритет над coarse diagnosis. Например `SCORING_GAP` может корректно уйти как `normalization-review`, а не `scoring-review`.
+
+Automatic YAML generation и automatic score increase отключены политикой handoff.
+
+### 7. Повторная проверка после rule changes
+
+После ручного rule engineering и deployment повторяется тот же evidence cycle:
 
 ```text
-DETECTION_GAP
-SCORING_GAP
+verify/replay
+  -> correlate-logs
+  -> diagnose
+  -> analyze-gaps
+  -> diff by case_id
 ```
 
-Corpus сохраняет:
+Новый `HTTP_BLOCK_OBSERVED` не считается автоматически `FIXED`. Подтверждённый WAF block — только security-log `verdict=Block`.
 
-- `case_id` / `test_id`;
-- payload и normalization evidence;
-- request/cURL;
-- replay response;
-- WAF score, threshold, verdict и matched rules;
-- diagnosis;
-- recommended workstream.
+## Дополнительные команды
 
-Автоматическая генерация YAML rules отключена архитектурно: evidence передаётся в `waf-rule-engineering`, где используются актуальная DSL-документация, scoring policy и regression tests.
-
-## 6. validate-fix
-
-Legacy workflow `validate-fix` остаётся доступен:
+Создание компактного XLSX:
 
 ```bash
-python waf_bypass_tool.py validate-fix \
-  --before work/verified.jsonl \
-  --execute \
-  --allow-host jutcy.glazapp.com \
-  --output-jsonl work/fix-validation.jsonl \
-  --output-xlsx work/fix-validation.xlsx
+python waf_bypass_tool.py report \
+  --input work/verified.jsonl \
+  --output work/verified.xlsx
 ```
 
-Новая семантика:
+Diff двух запусков:
 
-```text
-BYPASS_CONFIRMED      -> STILL_BYPASSED
-HTTP_BLOCK_OBSERVED    -> NEEDS_REVIEW
-ORIGIN_BLOCK_RESPONSE  -> NEEDS_REVIEW
-CHECK_ERROR            -> ERROR
+```bash
+python waf_bypass_tool.py diff \
+  --before work/before.jsonl \
+  --after work/after.jsonl \
+  --output-jsonl work/diff.jsonl \
+  --output-xlsx work/diff.xlsx
 ```
 
-Старый `BLOCKED_BY_WAF` по-прежнему читается как `FIXED` для обратной совместимости, но новые replay его не создают.
+Legacy `suggest-rules`, `refine-rules` и `validate-fix` остаются доступными для обратной совместимости, но основной интеграционный путь с `waf-rule-engineering` — через correlated/diagnosed/gap-analyzed evidence corpus.
 
-Для достоверной проверки исправления рекомендуется:
-
-```text
-validate/replay
-    -> correlate-logs
-    -> diagnose
-```
-
-и считать исправление подтверждённым WAF только при security-log verdict `Block`.
-
-## Legacy SecLang helpers
-
-Команды `suggest-rules` и `refine-rules` сохранены для обратной совместимости с ранними версиями проекта, но не являются целевой архитектурой интеграции с `waf-rule-engineering`.
-
-## Подробная документация
-
-Полный контракт security-log correlation и replay semantics находится в:
-
-```text
-docs/waf-security-log-workflow.md
-```
+Подробная модель telemetry/correlation описана в `docs/waf-security-log-workflow.md`.
