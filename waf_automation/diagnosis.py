@@ -7,7 +7,7 @@ from typing import Any
 from .common import read_jsonl, write_jsonl
 
 
-TERMINAL_REPLAY_ERRORS = {"CHECK_ERROR", "ROUTE_MISMATCH"}
+CONFIRMED_BYPASS_VERDICTS = {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
 
 
 def _decision_sources(log: dict[str, Any]) -> set[str]:
@@ -40,9 +40,14 @@ def diagnose_observation(observation: dict[str, Any]) -> tuple[str, str]:
     rule_engine = "ruleengine" in decision_sources
 
     if verdict == "block":
+        if replay_verdict in CONFIRMED_BYPASS_VERDICTS:
+            return "NEEDS_REVIEW", "Replay reports a confirmed bypass, but the joined security log says Block."
         if decision_sources and not rule_engine:
             return "BLOCKED_OTHER_SOURCE", "The request was blocked, but RuleEngine is not listed as a decision source."
         return "BLOCKED", "The WAF blocked the request and the security log confirms the decision."
+
+    if replay_verdict == "BLOCKED_BY_WAF" and verdict in {"allow", "monitor", "audit"}:
+        return "NEEDS_REVIEW", "Replay reports a WAF block, but the joined security log does not."
 
     score_known = isinstance(anomaly_score, int)
     threshold_known = isinstance(threshold, int)
