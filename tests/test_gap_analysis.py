@@ -20,6 +20,7 @@ class GapAnalysisTests(unittest.TestCase):
         diagnosis: str,
         score: int | None,
         rule_id: str | None = None,
+        normalized_payload: str = "logical-payload",
     ):
         matched_rules = [] if rule_id is None else [{"rule_id": rule_id, "score": score, "vendor": "generic-pack"}]
         return {
@@ -27,6 +28,7 @@ class GapAnalysisTests(unittest.TestCase):
             "variant": variant,
             "zone": zone,
             "encoding": encoding,
+            "normalized_payload": normalized_payload,
             "diagnosis": diagnosis,
             "diagnosis_reason": diagnosis,
             "category": "XSS",
@@ -44,9 +46,11 @@ class GapAnalysisTests(unittest.TestCase):
         weak = self._record("XSS/1.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 1, "10280")
         stronger = self._record("XSS/1.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 4, "20140")
         missing = self._record("XSS/1.json", "ARGS", "ARGS", "NONE", "DETECTION_GAP", 0)
+        other_source = self._record("XSS/1.json", "ARGS", "ARGS", "NONE", "BLOCKED_OTHER_SOURCE", 0)
         self.assertEqual(evidence_status(weak), "WEAK_PARTIAL")
         self.assertEqual(evidence_status(stronger), "PARTIAL")
         self.assertEqual(evidence_status(missing), "NO_DETECTION")
+        self.assertEqual(evidence_status(other_source), "REVIEW")
 
     def test_analyze_gap_clusters_finds_normalization_and_target_contrasts(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -76,6 +80,7 @@ class GapAnalysisTests(unittest.TestCase):
             self.assertEqual(clusters["XSS/276.json"]["primary_workstream"], "normalization-review")
             self.assertIn("TARGET_GAP_CANDIDATE", clusters["XSS/192.json"]["flags"])
             self.assertIn("PARTIAL_DETECTION_CANDIDATE", clusters["XSS/192.json"]["flags"])
+            self.assertEqual(clusters["XSS/192.json"]["normalized_payload_variant_count"], 1)
 
             cases = read_jsonl(output_dir / "cases.jsonl")
             normalized_case = next(record for record in cases if record["payload_path"] == "XSS/276.json")
@@ -84,6 +89,29 @@ class GapAnalysisTests(unittest.TestCase):
             manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
             self.assertFalse(manifest["policy"]["automatic_score_increase"])
             self.assertTrue(manifest["policy"]["rule_metadata_required_for_true_scoring_gap"])
+            self.assertTrue(manifest["policy"]["comparative_gap_requires_equal_normalized_payload"])
+
+    def test_target_contrast_requires_same_normalized_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "diagnosed.jsonl"
+            records = [
+                self._record(
+                    "XSS/192.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 1, "10280",
+                    normalized_payload="prompt(1)",
+                ),
+                self._record(
+                    "XSS/192.json", "COOKIE", "COOKIE", "NONE", "DETECTION_GAP", 0,
+                    normalized_payload="param123=(1)",
+                ),
+            ]
+            write_jsonl(source, records)
+            output_dir = root / "gap-analysis"
+            summary = analyze_gap_clusters(source, output_dir)
+            self.assertNotIn("TARGET_GAP_CANDIDATE", summary["cluster_flags"])
+            cluster = read_jsonl(output_dir / "clusters.jsonl")[0]
+            self.assertEqual(cluster["target_contrasts"], [])
+            self.assertEqual(cluster["normalized_payload_variant_count"], 2)
 
     def test_handoff_prefers_gap_analysis_workstream(self) -> None:
         record = self._record("XSS/276.json", "ARGS:BASE64", "ARGS", "BASE64", "SCORING_GAP", 4, "20140")
