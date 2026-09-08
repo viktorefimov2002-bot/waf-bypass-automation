@@ -194,24 +194,6 @@ Current diagnoses:
 
 `SCORING_GAP` is deliberately a coarse observation-level diagnosis. It does not by itself prove that the correct attack detector matched or that its score should be raised.
 
-Examples:
-
-```text
-HTTP 403 + no Server + security verdict Block
-    -> BLOCKED
-
-HTTP 403 + no Server + security verdict Allow + score 0
-    -> DETECTION_GAP
-    (the HTTP block came from somewhere else; WAF did not detect it)
-
-HTTP 200 + nginx + security verdict Allow + score 5 / threshold 7
-    -> SCORING_GAP
-
-HTTP 200 + nginx + security verdict Block
-    -> NEEDS_REVIEW
-    (origin evidence contradicts WAF Block telemetry)
-```
-
 ## 5. Analyze gaps across related variants
 
 Before changing YAML rules or scores, group observations by their source payload and compare encodings and target zones:
@@ -222,7 +204,7 @@ python waf_bypass_tool.py analyze-gaps \
   --output-dir work/gap-analysis
 ```
 
-The comparison unit is `payload_path`, not an individual replay request. This prevents dozens of ARGS/BODY/COOKIE/HEADER/encoding variants of the same logical payload from being treated as independent rule-design requirements.
+The comparison unit starts from `payload_path`, not an individual replay request. This prevents dozens of ARGS/BODY/COOKIE/HEADER/encoding variants of the same source payload from being treated as independent rule-design requirements.
 
 Output includes:
 
@@ -243,17 +225,24 @@ Behavior evidence classes:
 - `NO_DETECTION` — observation diagnosis is `DETECTION_GAP`;
 - `WEAK_PARTIAL` — `SCORING_GAP` with anomaly score 1-2;
 - `PARTIAL` — stronger below-threshold `SCORING_GAP`;
-- `WOULD_BLOCK` / `BLOCKED` — positive WAF outcome;
-- `UNUSABLE` — replay/log correlation was not usable for comparison.
+- `WOULD_BLOCK` / `BLOCKED` — positive rule-engine evidence;
+- `UNUSABLE` — replay/log correlation was not usable for comparison;
+- `REVIEW` — evidence that must not be used as positive detector evidence, including `BLOCKED_OTHER_SOURCE`.
 
 Cluster flags are deliberately candidates, not definitive root-cause claims:
 
-- `NORMALIZATION_GAP_CANDIDATE` — the same payload in the same target zone has no detection in one encoding but positive detection in another;
-- `TARGET_GAP_CANDIDATE` — the same payload/encoding has no detection in one zone but positive detection in another;
+- `NORMALIZATION_GAP_CANDIDATE` — the same source payload, target zone, and exact `normalized_payload` has no detection in one encoding but positive detection in another;
+- `TARGET_GAP_CANDIDATE` — the same source payload, encoding, and exact `normalized_payload` has no detection in one zone but positive detection in another;
 - `PARTIAL_DETECTION_CANDIDATE` — at least one weak 1-2 score exists; do not automatically raise it;
 - `SCORING_REVIEW_CANDIDATE` — a stronger below-threshold score exists, but matched-rule relevance must still be checked;
 - `PURE_DETECTION_GAP` — every usable variant in the cluster had no detection;
 - `REPLAY_ERROR_PRESENT` — at least one variant must be replayed successfully before the cluster is considered complete.
+
+### Why exact normalized-payload equality is required
+
+A shared `payload_path` alone does not prove that two target variants expose the same value to the WAF. BODY/ARGS/COOKIE/HEADER forms may contain parameter wrappers, URI prefixes, or extraction artifacts. Without this guard, a difference caused by payload extraction can be mislabeled as a WAF target gap.
+
+Therefore comparative normalization/target flags are emitted only inside groups with the same exact `normalized_payload`. Different normalized shapes remain in the same source cluster for manual/partial-detection review but do not create an automatic target/normalization contrast.
 
 The gap-analysis manifest explicitly disables automatic score increases. A true scoring-only gap requires rule metadata proving that the matched rule is relevant to the attack primitive.
 
@@ -267,12 +256,7 @@ python waf_bypass_tool.py export-corpus \
   --output-dir work/rule-engineering-corpus
 ```
 
-Default export includes:
-
-```text
-DETECTION_GAP
-SCORING_GAP
-```
+Default export includes `DETECTION_GAP` and `SCORING_GAP`.
 
 If `gap_analysis` is present, its `primary_workstream` takes precedence over the coarse diagnosis-based workstream. For example, a `SCORING_GAP` observation may correctly be handed off as `normalization-review` rather than `scoring-review` when comparative evidence shows encoding-dependent detection.
 
@@ -293,7 +277,7 @@ CHECK_ERROR           -> ERROR
 
 Legacy `BLOCKED_BY_WAF` remains readable as `FIXED` for backward compatibility, but new runs do not generate that verdict.
 
-The intended authoritative post-fix flow is therefore:
+The intended authoritative post-fix flow is:
 
 ```text
 validate/replay
