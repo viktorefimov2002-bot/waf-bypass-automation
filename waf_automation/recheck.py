@@ -9,7 +9,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .common import code_verdict, normalize_block_codes, read_jsonl, stable_key, utc_now
+from .common import code_verdict, curl_hash, normalize_block_codes, read_jsonl, stable_key, utc_now
+from .correlation import CORRELATION_HEADER, make_case_id, make_replay_run_id, make_test_id
 from .curl_parser import extract_request, split_curl
 
 
@@ -109,11 +110,12 @@ def verdict(http_code: int | None, server: str | None, block_codes: list[int] | 
     return code, route, final
 
 
-def _execute(record: dict[str, Any], timeout: float) -> dict[str, Any]:
+def _execute(record: dict[str, Any], timeout: float, test_id: str) -> dict[str, Any]:
     argv = split_curl(record["curl"])
     validate_replay_argv(argv)
     with tempfile.NamedTemporaryFile(prefix="waf-headers-", suffix=".txt") as header_file:
         command = argv + [
+            "--header", f"{CORRELATION_HEADER}: {test_id}",
             "--silent", "--show-error", "--output", "/dev/null", "--dump-header", header_file.name,
             "--write-out", "%{http_code}", "--max-redirs", "0", "--max-time", str(timeout),
         ]
@@ -136,7 +138,17 @@ def _execute(record: dict[str, Any], timeout: float) -> dict[str, Any]:
         "code_verdict": code, "route_verdict": route, "final_verdict": final,
         "duration_ms": duration_ms, "curl_exit_code": completed.returncode,
         "stderr": completed.stderr.decode("utf-8", errors="replace").strip(),
+        "correlation_sent": True,
     }
+
+
+def _case_id(record: dict[str, Any]) -> str:
+    existing = record.get("case_id")
+    if existing:
+        return str(existing)
+    command = str(record.get("curl", ""))
+    command_hash = str(record.get("curl_hash") or curl_hash(command))
+    return make_case_id(str(record["payload_path"]), str(record["variant"]), command_hash)
 
 
 def recheck_records(
@@ -163,10 +175,11 @@ def recheck_records(
     if limit is not None:
         selected = selected[:limit]
 
+    replay_run_id = make_replay_run_id()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     print(
         f"Replay selection: selected={len(selected)}, execute={execute}, "
-        f"timeout={timeout}s, delay={delay}s, output={output_path}",
+        f"timeout={timeout}s, delay={delay}s, replay_run_id={replay_run_id}, output={output_path}",
         file=sys.stderr,
         flush=True,
     )
@@ -183,28 +196,35 @@ def recheck_records(
                 raise ValueError("--allow-host is required together with --execute")
 
             key = stable_key(record)
+            case_id = _case_id(record)
+            test_id = make_test_id(replay_run_id, index, case_id)
             print(
-                f"[{index}/{len(selected)}] replay {key} host={host}",
+                f"[{index}/{len(selected)}] replay {key} case_id={case_id} test_id={test_id} host={host}",
                 file=sys.stderr,
                 flush=True,
             )
             result = dict(record)
             result["stable_key"] = key
+            result["case_id"] = case_id
+            result["replay_run_id"] = replay_run_id
+            result["test_id"] = test_id
+            result["correlation_header"] = CORRELATION_HEADER
             if execute:
                 try:
-                    result.update(_execute(record, timeout))
+                    result.update(_execute(record, timeout, test_id))
                 except Exception as exc:
                     result.update({
                         "checked_at": utc_now(), "http_code": None, "server_header": None,
                         "code_verdict": "UNKNOWN_CODE", "route_verdict": "ROUTE_UNCONFIRMED",
                         "final_verdict": "CHECK_ERROR", "duration_ms": None,
-                        "curl_exit_code": None, "stderr": str(exc),
+                        "curl_exit_code": None, "stderr": str(exc), "correlation_sent": False,
                     })
                 executed += 1
             else:
                 result.update({
                     "checked_at": None, "server_header": None, "route_verdict": "NOT_CHECKED",
                     "final_verdict": "DRY_RUN", "duration_ms": None, "curl_exit_code": None, "stderr": "",
+                    "correlation_sent": False,
                 })
 
             output_handle.write(json.dumps(result, ensure_ascii=False, sort_keys=True))
@@ -219,4 +239,7 @@ def recheck_records(
             if execute and delay > 0 and index < len(selected):
                 time.sleep(delay)
 
-    return {"selected": len(selected), "executed": executed, "output": str(output_path)}
+    return {
+        "selected": len(selected), "executed": executed, "replay_run_id": replay_run_id,
+        "correlation_header": CORRELATION_HEADER, "output": str(output_path),
+    }
