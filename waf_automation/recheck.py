@@ -7,7 +7,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from .common import code_verdict, curl_hash, normalize_block_codes, read_jsonl, stable_key, utc_now
 from .correlation import CORRELATION_HEADER, make_case_id, make_replay_run_id, make_test_id
@@ -184,14 +184,20 @@ def recheck_records(
     timeout: float,
     delay: float,
     only_confirmed_bypasses: bool = False,
+    only_verdicts: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     records = read_jsonl(input_path)
+    verdict_filter = {str(value).strip().upper() for value in (only_verdicts or []) if str(value).strip()}
     selected = [
         record for record in records
         if (group_id is None or record.get("group_id") == group_id)
         and (
             not only_confirmed_bypasses
             or record.get("final_verdict") in CONFIRMED_BYPASS_VERDICTS
+        )
+        and (
+            not verdict_filter
+            or str(record.get("final_verdict") or "").upper() in verdict_filter
         )
     ]
     if limit is not None:
@@ -201,7 +207,8 @@ def recheck_records(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     print(
         f"Replay selection: selected={len(selected)}, execute={execute}, "
-        f"timeout={timeout}s, delay={delay}s, replay_run_id={replay_run_id}, output={output_path}",
+        f"timeout={timeout}s, delay={delay}s, verdict_filter={sorted(verdict_filter)}, "
+        f"replay_run_id={replay_run_id}, output={output_path}",
         file=sys.stderr,
         flush=True,
     )
@@ -266,5 +273,6 @@ def recheck_records(
 
     return {
         "selected": len(selected), "executed": executed, "replay_run_id": replay_run_id,
-        "correlation_header": CORRELATION_HEADER, "output": str(output_path),
+        "correlation_header": CORRELATION_HEADER, "verdict_filter": sorted(verdict_filter),
+        "output": str(output_path),
     }
