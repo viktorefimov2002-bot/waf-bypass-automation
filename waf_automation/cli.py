@@ -6,6 +6,7 @@ from pathlib import Path
 
 from .diagnosis import diagnose_observations
 from .diffing import diff_runs
+from .handoff import export_rule_engineering_corpus
 from .importer import import_report
 from .recheck import recheck_records
 from .refinement import refine_rules
@@ -73,6 +74,19 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--output", required=True, type=_path)
 
     command = subparsers.add_parser(
+        "export-corpus",
+        help="Export diagnosed attack cases as a neutral handoff corpus for waf-rule-engineering",
+    )
+    command.add_argument("--input", required=True, type=_path, help="diagnosed.jsonl from diagnose")
+    command.add_argument("--output-dir", required=True, type=_path)
+    command.add_argument(
+        "--diagnosis",
+        action="append",
+        default=None,
+        help="Diagnosis to export; repeat for multiple values. Default: DETECTION_GAP and SCORING_GAP.",
+    )
+
+    command = subparsers.add_parser(
         "validate-fix",
         help="Replay only previously confirmed bypasses after WAF rules are deployed",
     )
@@ -137,6 +151,8 @@ def main(argv: list[str] | None = None) -> int:
         result = correlate_logs(args.replay, args.security_log, args.output)
     elif args.command == "diagnose":
         result = diagnose_observations(args.input, args.output)
+    elif args.command == "export-corpus":
+        result = export_rule_engineering_corpus(args.input, args.output_dir, args.diagnosis)
     elif args.command == "validate-fix":
         result = validate_fixes(
             args.before,
