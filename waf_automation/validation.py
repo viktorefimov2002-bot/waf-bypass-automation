@@ -18,6 +18,8 @@ CONFIRMED_BYPASS_VERDICTS = {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
 
 def _fix_status(after: dict[str, Any]) -> str:
     verdict = after.get("final_verdict")
+    # Legacy replay records may contain BLOCKED_BY_WAF. New replay logic no longer
+    # infers a WAF decision from response headers alone.
     if verdict == "BLOCKED_BY_WAF":
         return "FIXED"
     if verdict in CONFIRMED_BYPASS_VERDICTS:
@@ -139,6 +141,9 @@ def validate_fixes(
         if rule_id and manifest_path and not rule:
             rule_mapping_status = "RULE_NOT_FOUND_IN_MANIFEST"
 
+        response_block_observed = new.get("final_verdict") in {
+            "BLOCKED_BY_WAF", "HTTP_BLOCK_OBSERVED", "ORIGIN_BLOCK_RESPONSE"
+        }
         rows.append({
             "stable_key": key,
             "payload_path": new.get("payload_path"),
@@ -148,12 +153,17 @@ def validate_fixes(
             "group_id": new.get("group_id"),
             "group_name": new.get("group_name"),
             "status": _fix_status(new),
-            "request_blocked_now": new.get("final_verdict") == "BLOCKED_BY_WAF",
+            "request_blocked_now": response_block_observed,
+            "waf_block_confirmed_by_replay": new.get("final_verdict") == "BLOCKED_BY_WAF",
             "before_code": old.get("http_code"),
             "before_server": old.get("server_header"),
             "after_code": new.get("http_code"),
             "after_server": new.get("server_header"),
+            "after_route": new.get("route_verdict"),
             "after_verdict": new.get("final_verdict"),
+            "remote_ip": new.get("remote_ip"),
+            "local_ip": new.get("local_ip"),
+            "url_effective": new.get("url_effective"),
             "duration_ms": new.get("duration_ms"),
             "rule_mapping_status": rule_mapping_status,
             "rule_id": int(rule_id) if rule_id.isdigit() else None,
