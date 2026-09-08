@@ -9,6 +9,7 @@ from .diffing import diff_runs
 from .gap_analysis import analyze_gap_clusters
 from .handoff import export_rule_engineering_corpus
 from .importer import import_report
+from .merge_cases import merge_case_records
 from .recheck import recheck_records
 from .refinement import refine_rules
 from .report import create_compact_report, create_report
@@ -78,6 +79,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Classify correlated observations as detection/scoring/policy/telemetry outcomes",
     )
     command.add_argument("--input", required=True, type=_path, help="observations.jsonl from correlate-logs")
+    command.add_argument("--output", required=True, type=_path)
+
+    command = subparsers.add_parser(
+        "merge-cases",
+        help="Replace older JSONL records with newer records using stable case_id identity",
+    )
+    command.add_argument("--base", required=True, type=_path)
+    command.add_argument("--updates", required=True, type=_path)
     command.add_argument("--output", required=True, type=_path)
 
     command = subparsers.add_parser(
@@ -166,6 +175,8 @@ def main(argv: list[str] | None = None) -> int:
         result = correlate_logs(args.replay, args.security_log, args.output)
     elif args.command == "diagnose":
         result = diagnose_observations(args.input, args.output)
+    elif args.command == "merge-cases":
+        result = merge_case_records(args.base, args.updates, args.output)
     elif args.command == "analyze-gaps":
         result = analyze_gap_clusters(args.input, args.output_dir)
     elif args.command == "export-corpus":
