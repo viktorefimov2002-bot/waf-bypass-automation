@@ -31,6 +31,12 @@ def _add_verify_arguments(command: argparse.ArgumentParser) -> None:
     command.add_argument("--limit", type=int)
     command.add_argument("--timeout", type=float, default=15.0)
     command.add_argument("--delay", type=float, default=0.2)
+    command.add_argument(
+        "--only-verdict",
+        action="append",
+        default=None,
+        help="Replay only records with this prior final_verdict; repeat for multiple values (for example CHECK_ERROR).",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -148,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             timeout=args.timeout,
             delay=args.delay,
+            only_verdicts=args.only_verdict,
         )
         result["command"] = "verify"
         if args.report_xlsx:
