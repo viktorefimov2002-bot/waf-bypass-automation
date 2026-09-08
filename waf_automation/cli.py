@@ -4,12 +4,14 @@ import argparse
 import json
 from pathlib import Path
 
+from .diagnosis import diagnose_observations
 from .diffing import diff_runs
 from .importer import import_report
 from .recheck import recheck_records
 from .refinement import refine_rules
 from .report import create_compact_report, create_report
 from .rules import suggest_rules
+from .telemetry import correlate_logs
 from .validation import validate_fixes
 
 
@@ -54,6 +56,21 @@ def build_parser() -> argparse.ArgumentParser:
 
     command = subparsers.add_parser("recheck", help="Deprecated alias for verify")
     _add_verify_arguments(command)
+
+    command = subparsers.add_parser(
+        "correlate-logs",
+        help="Join replay JSONL with WAF security-log telemetry by waf-fp-test-id/test_id",
+    )
+    command.add_argument("--replay", required=True, type=_path, help="verified/replayed JSONL containing test_id")
+    command.add_argument("--security-log", required=True, type=_path, help="Security log as JSONL/JSONEachRow, JSON array, or object with rows/data/result")
+    command.add_argument("--output", required=True, type=_path)
+
+    command = subparsers.add_parser(
+        "diagnose",
+        help="Classify correlated observations as detection/scoring/policy/telemetry outcomes",
+    )
+    command.add_argument("--input", required=True, type=_path, help="observations.jsonl from correlate-logs")
+    command.add_argument("--output", required=True, type=_path)
 
     command = subparsers.add_parser(
         "validate-fix",
@@ -116,6 +133,10 @@ def main(argv: list[str] | None = None) -> int:
             result["report_xlsx"] = report_result["output"]
         if args.command == "recheck":
             result["warning"] = "The recheck command is deprecated; use verify instead."
+    elif args.command == "correlate-logs":
+        result = correlate_logs(args.replay, args.security_log, args.output)
+    elif args.command == "diagnose":
+        result = diagnose_observations(args.input, args.output)
     elif args.command == "validate-fix":
         result = validate_fixes(
             args.before,
