@@ -12,6 +12,9 @@ from waf_automation.recheck import recheck_records
 
 
 class CorrelationTests(unittest.TestCase):
+    def test_correlation_header_matches_waf_security_log_contract(self) -> None:
+        self.assertEqual(CORRELATION_HEADER, "x-waf-fp-test-id")
+
     def test_case_id_is_stable_and_request_sensitive(self) -> None:
         first = make_case_id("XSS/1.json", "ARGS", "abc123")
         self.assertEqual(first, make_case_id("XSS/1.json", "ARGS", "abc123"))
