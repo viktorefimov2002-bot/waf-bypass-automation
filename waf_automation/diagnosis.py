@@ -8,6 +8,7 @@ from .common import read_jsonl, write_jsonl
 
 
 CONFIRMED_BYPASS_VERDICTS = {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
+LEGACY_WAF_BLOCK_VERDICTS = {"BLOCKED_BY_WAF"}
 
 
 def _decision_sources(log: dict[str, Any]) -> set[str]:
@@ -20,7 +21,7 @@ def diagnose_observation(observation: dict[str, Any]) -> tuple[str, str]:
     if replay_verdict == "CHECK_ERROR":
         return "CHECK_ERROR", "Replay itself failed, so WAF coverage cannot be evaluated reliably."
     if replay_verdict == "ROUTE_MISMATCH":
-        return "ROUTE_MISMATCH", "Replay response route did not match the expected WAF/origin path."
+        return "ROUTE_MISMATCH", "Legacy replay response route did not match the expected WAF/origin path."
 
     correlation_status = observation.get("correlation_status")
     if correlation_status in {"LOG_NOT_FOUND", "MISSING_REPLAY_TEST_ID"}:
@@ -39,15 +40,20 @@ def diagnose_observation(observation: dict[str, Any]) -> tuple[str, str]:
     decision_sources = _decision_sources(log)
     rule_engine = "ruleengine" in decision_sources
 
+    # Security telemetry is authoritative for the WAF decision. HTTP replay only
+    # confirms that an origin signature was seen, or that a block-like status was
+    # observed; it no longer infers WAF ownership from an absent Server header.
     if verdict == "block":
         if replay_verdict in CONFIRMED_BYPASS_VERDICTS:
-            return "NEEDS_REVIEW", "Replay reports a confirmed bypass, but the joined security log says Block."
+            return "NEEDS_REVIEW", "Replay reached the origin, but the joined security log says Block."
+        if replay_verdict == "ORIGIN_BLOCK_RESPONSE":
+            return "NEEDS_REVIEW", "Replay response carries the origin signature, but the joined security log says Block."
         if decision_sources and not rule_engine:
             return "BLOCKED_OTHER_SOURCE", "The request was blocked, but RuleEngine is not listed as a decision source."
         return "BLOCKED", "The WAF blocked the request and the security log confirms the decision."
 
-    if replay_verdict == "BLOCKED_BY_WAF" and verdict in {"allow", "monitor", "audit"}:
-        return "NEEDS_REVIEW", "Replay reports a WAF block, but the joined security log does not."
+    if replay_verdict in LEGACY_WAF_BLOCK_VERDICTS and verdict in {"allow", "monitor", "audit"}:
+        return "NEEDS_REVIEW", "Legacy replay reports a WAF block, but the joined security log does not."
 
     score_known = isinstance(anomaly_score, int)
     threshold_known = isinstance(threshold, int)
