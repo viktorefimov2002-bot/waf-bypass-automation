@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 
-CORRELATION_HEADER = "waf-fp-test-id"
+# The WAF security log maps this request header into its `test_id` field.
+CORRELATION_HEADER = "x-waf-fp-test-id"
 
 
 def make_case_id(payload_path: str, variant: str, curl_hash_value: str) -> str:
