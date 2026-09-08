@@ -84,27 +84,46 @@ def _parse_final_headers(raw: bytes) -> tuple[str | None, int | None]:
     return server, status
 
 
+def _parse_write_out(stdout: str) -> tuple[int | None, str | None, str | None, str | None]:
+    text = stdout.strip()
+    if "\t" in text:
+        parts = text.split("\t", 3)
+        code_text = parts[0] if parts else ""
+        remote_ip = parts[1] or None if len(parts) > 1 else None
+        local_ip = parts[2] or None if len(parts) > 2 else None
+        url_effective = parts[3] or None if len(parts) > 3 else None
+    else:
+        code_text = text[-3:]
+        remote_ip = local_ip = url_effective = None
+    http_code = int(code_text) if re.fullmatch(r"\d{3}", code_text) else None
+    return http_code, remote_ip, local_ip, url_effective
+
+
 def verdict(http_code: int | None, server: str | None, block_codes: list[int] | None = None) -> tuple[str, str, str]:
+    """Classify only what can be established from the HTTP response.
+
+    The origin currently identifies itself with nginx/Ubuntu. Absence of that
+    signature does not prove a WAF block; authoritative WAF decisions come from
+    the security log joined by test_id.
+    """
     block_codes = normalize_block_codes(block_codes)
     server_lower = (server or "").lower()
     if "nginx" in server_lower or "ubuntu" in server_lower:
         route = "ORIGIN_CONFIRMED"
-    elif "pingora" in server_lower:
-        route = "WAF_CONFIRMED"
     elif server:
         route = "ROUTE_OTHER"
     else:
-        route = "ROUTE_UNCONFIRMED"
+        route = "NO_ORIGIN_SIGNATURE"
 
     code = code_verdict(http_code, block_codes)
     if http_code is None:
         final = "CHECK_ERROR"
-    elif http_code in block_codes and route == "WAF_CONFIRMED":
-        final = "BLOCKED_BY_WAF"
-    elif http_code not in block_codes and route == "ORIGIN_CONFIRMED":
-        final = "BYPASS_CONFIRMED"
+    elif http_code in block_codes and route == "ORIGIN_CONFIRMED":
+        final = "ORIGIN_BLOCK_RESPONSE"
     elif http_code in block_codes:
-        final = "ROUTE_MISMATCH"
+        final = "HTTP_BLOCK_OBSERVED"
+    elif route == "ORIGIN_CONFIRMED":
+        final = "BYPASS_CONFIRMED"
     else:
         final = "BYPASS_UNCONFIRMED"
     return code, route, final
@@ -117,15 +136,16 @@ def _execute(record: dict[str, Any], timeout: float, test_id: str) -> dict[str, 
         command = argv + [
             "--header", f"{CORRELATION_HEADER}: {test_id}",
             "--silent", "--show-error", "--output", "/dev/null", "--dump-header", header_file.name,
-            "--write-out", "%{http_code}", "--max-redirs", "0", "--max-time", str(timeout),
+            "--write-out", "%{http_code}\t%{remote_ip}\t%{local_ip}\t%{url_effective}",
+            "--max-redirs", "0", "--max-time", str(timeout),
         ]
         started = time.monotonic()
         completed = subprocess.run(command, shell=False, capture_output=True, timeout=timeout + 5, check=False)
         duration_ms = round((time.monotonic() - started) * 1000)
         header_file.seek(0)
         header_bytes = header_file.read()
-    stdout = completed.stdout.decode("ascii", errors="ignore").strip()
-    http_code = int(stdout[-3:]) if re.fullmatch(r"\d{3}", stdout[-3:]) else None
+    stdout = completed.stdout.decode("utf-8", errors="replace")
+    http_code, remote_ip, local_ip, url_effective = _parse_write_out(stdout)
     server, header_status = _parse_final_headers(header_bytes)
     if http_code is None:
         http_code = header_status
@@ -136,6 +156,7 @@ def _execute(record: dict[str, Any], timeout: float, test_id: str) -> dict[str, 
     return {
         "checked_at": utc_now(), "http_code": http_code, "server_header": server,
         "code_verdict": code, "route_verdict": route, "final_verdict": final,
+        "remote_ip": remote_ip, "local_ip": local_ip, "url_effective": url_effective,
         "duration_ms": duration_ms, "curl_exit_code": completed.returncode,
         "stderr": completed.stderr.decode("utf-8", errors="replace").strip(),
         "correlation_sent": True,
@@ -216,14 +237,16 @@ def recheck_records(
                     result.update({
                         "checked_at": utc_now(), "http_code": None, "server_header": None,
                         "code_verdict": "UNKNOWN_CODE", "route_verdict": "ROUTE_UNCONFIRMED",
-                        "final_verdict": "CHECK_ERROR", "duration_ms": None,
-                        "curl_exit_code": None, "stderr": str(exc), "correlation_sent": False,
+                        "final_verdict": "CHECK_ERROR", "remote_ip": None, "local_ip": None,
+                        "url_effective": None, "duration_ms": None, "curl_exit_code": None,
+                        "stderr": str(exc), "correlation_sent": False,
                     })
                 executed += 1
             else:
                 result.update({
                     "checked_at": None, "server_header": None, "route_verdict": "NOT_CHECKED",
-                    "final_verdict": "DRY_RUN", "duration_ms": None, "curl_exit_code": None, "stderr": "",
+                    "final_verdict": "DRY_RUN", "remote_ip": None, "local_ip": None,
+                    "url_effective": None, "duration_ms": None, "curl_exit_code": None, "stderr": "",
                     "correlation_sent": False,
                 })
 
@@ -232,7 +255,8 @@ def recheck_records(
             output_handle.flush()
             print(
                 f"[{index}/{len(selected)}] result={result.get('final_verdict')} "
-                f"http={result.get('http_code')} duration_ms={result.get('duration_ms')}",
+                f"http={result.get('http_code')} remote_ip={result.get('remote_ip')} "
+                f"duration_ms={result.get('duration_ms')}",
                 file=sys.stderr,
                 flush=True,
             )
