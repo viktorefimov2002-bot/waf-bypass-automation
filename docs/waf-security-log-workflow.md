@@ -30,7 +30,7 @@ The tool uses three identifiers:
 During real replay the tool adds:
 
 ```text
-waf-fp-test-id: <test_id>
+x-waf-fp-test-id: <test_id>
 ```
 
 The primary correlation is exact:
@@ -70,6 +70,25 @@ url_effective
 ```
 
 These values help diagnose DNS, proxy, IPv4/IPv6 and routing differences.
+
+### cURL URL globbing
+
+Runtime replay always adds `--globoff`. This is required because attack payloads frequently contain literal `[` and `]`, which cURL otherwise interprets as URL range/globbing syntax and rejects before sending the request.
+
+The original stored cURL remains unchanged; `--globoff` is injected only into the runtime command.
+
+To retry only records that previously failed replay:
+
+```bash
+python waf_bypass_tool.py verify \
+  --input work/verified.jsonl \
+  --only-verdict CHECK_ERROR \
+  --execute \
+  --allow-host jutcy.glazapp.com \
+  --output work/retried-check-errors.jsonl
+```
+
+`--only-verdict` may be repeated when several prior replay verdicts should be selected.
 
 ### Replay route verdicts
 
@@ -173,6 +192,8 @@ Current diagnoses:
 - `CHECK_ERROR` — replay failed;
 - `NEEDS_REVIEW` — replay/security telemetry is ambiguous or contradictory.
 
+`SCORING_GAP` is deliberately a coarse observation-level diagnosis. It does not by itself prove that the correct attack detector matched or that its score should be raised.
+
 Examples:
 
 ```text
@@ -191,36 +212,58 @@ HTTP 200 + nginx + security verdict Block
     (origin evidence contradicts WAF Block telemetry)
 ```
 
-## 5. validate-fix semantics
+## 5. Analyze gaps across related variants
 
-New replay results no longer mark a case `FIXED` solely because a block-like HTTP status was observed.
+Before changing YAML rules or scores, group observations by their source payload and compare encodings and target zones:
 
-For new artifacts:
-
-```text
-HTTP_BLOCK_OBSERVED  -> NEEDS_REVIEW until security telemetry is correlated
-ORIGIN_BLOCK_RESPONSE -> NEEDS_REVIEW
-BYPASS_CONFIRMED     -> STILL_BYPASSED
-CHECK_ERROR          -> ERROR
+```bash
+python waf_bypass_tool.py analyze-gaps \
+  --input work/diagnosed.jsonl \
+  --output-dir work/gap-analysis
 ```
 
-Legacy `BLOCKED_BY_WAF` remains readable as `FIXED` for backward compatibility, but new runs do not generate that verdict.
+The comparison unit is `payload_path`, not an individual replay request. This prevents dozens of ARGS/BODY/COOKIE/HEADER/encoding variants of the same logical payload from being treated as independent rule-design requirements.
 
-The intended authoritative post-fix flow is therefore:
+Output includes:
 
 ```text
-validate/replay
-    -> correlate-logs
-    -> diagnose
+clusters.jsonl
+cases.jsonl
+manifest.json
+normalization-gap-candidates.jsonl
+target-gap-candidates.jsonl
+pure-detection-gap-clusters.jsonl
+partial-detection-candidates.jsonl
+scoring-review-candidates.jsonl
+replay-error-clusters.jsonl
 ```
 
-A case is confirmed blocked by the WAF only when the joined security log says `Block`.
+Behavior evidence classes:
+
+- `NO_DETECTION` — observation diagnosis is `DETECTION_GAP`;
+- `WEAK_PARTIAL` — `SCORING_GAP` with anomaly score 1-2;
+- `PARTIAL` — stronger below-threshold `SCORING_GAP`;
+- `WOULD_BLOCK` / `BLOCKED` — positive WAF outcome;
+- `UNUSABLE` — replay/log correlation was not usable for comparison.
+
+Cluster flags are deliberately candidates, not definitive root-cause claims:
+
+- `NORMALIZATION_GAP_CANDIDATE` — the same payload in the same target zone has no detection in one encoding but positive detection in another;
+- `TARGET_GAP_CANDIDATE` — the same payload/encoding has no detection in one zone but positive detection in another;
+- `PARTIAL_DETECTION_CANDIDATE` — at least one weak 1-2 score exists; do not automatically raise it;
+- `SCORING_REVIEW_CANDIDATE` — a stronger below-threshold score exists, but matched-rule relevance must still be checked;
+- `PURE_DETECTION_GAP` — every usable variant in the cluster had no detection;
+- `REPLAY_ERROR_PRESENT` — at least one variant must be replayed successfully before the cluster is considered complete.
+
+The gap-analysis manifest explicitly disables automatic score increases. A true scoring-only gap requires rule metadata proving that the matched rule is relevant to the attack primitive.
 
 ## 6. Export neutral evidence to waf-rule-engineering
 
+When gap analysis has been performed, export its enriched `cases.jsonl` rather than the raw diagnosed file so cluster/workstream evidence is preserved:
+
 ```bash
 python waf_bypass_tool.py export-corpus \
-  --input work/diagnosed.jsonl \
+  --input work/gap-analysis/cases.jsonl \
   --output-dir work/rule-engineering-corpus
 ```
 
@@ -231,4 +274,32 @@ DETECTION_GAP
 SCORING_GAP
 ```
 
+If `gap_analysis` is present, its `primary_workstream` takes precedence over the coarse diagnosis-based workstream. For example, a `SCORING_GAP` observation may correctly be handed off as `normalization-review` rather than `scoring-review` when comparative evidence shows encoding-dependent detection.
+
 The handoff remains evidence rather than automatic YAML generation. `waf-rule-engineering` stays the source of truth for DSL-specific rules and tests.
+
+## 7. validate-fix semantics
+
+New replay results no longer mark a case `FIXED` solely because a block-like HTTP status was observed.
+
+For new artifacts:
+
+```text
+HTTP_BLOCK_OBSERVED   -> NEEDS_REVIEW until security telemetry is correlated
+ORIGIN_BLOCK_RESPONSE -> NEEDS_REVIEW
+BYPASS_CONFIRMED      -> STILL_BYPASSED
+CHECK_ERROR           -> ERROR
+```
+
+Legacy `BLOCKED_BY_WAF` remains readable as `FIXED` for backward compatibility, but new runs do not generate that verdict.
+
+The intended authoritative post-fix flow is therefore:
+
+```text
+validate/replay
+    -> correlate-logs
+    -> diagnose
+    -> analyze-gaps
+```
+
+A case is confirmed blocked by the WAF only when the joined security log says `Block`.
