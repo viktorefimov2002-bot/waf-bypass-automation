@@ -50,17 +50,17 @@ class CorrelationTests(unittest.TestCase):
             self.assertTrue(result["test_id"].startswith(summary["replay_run_id"] + "-"))
             self.assertFalse(result["correlation_sent"])
 
-    def test_execute_injects_correlation_header(self) -> None:
+    def test_execute_injects_correlation_header_and_disables_url_globbing(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "input.jsonl"
             output = root / "output.jsonl"
             write_jsonl(source, [{
-                "payload_path": "XSS/1.json",
+                "payload_path": "XSS/97.json",
                 "variant": "ARGS",
                 "group_id": 85,
                 "block_codes": [403],
-                "curl": "curl 'https://example.test/?q=test'",
+                "curl": "curl 'https://example.test/?q=top[alert](1)'",
             }])
 
             seen_command: list[str] = []
@@ -69,7 +69,11 @@ class CorrelationTests(unittest.TestCase):
                 seen_command.extend(command)
                 header_path = Path(command[command.index("--dump-header") + 1])
                 header_path.write_bytes(b"HTTP/1.1 200 OK\r\nServer: nginx\r\n\r\n")
-                return subprocess.CompletedProcess(command, 0, stdout=b"200", stderr=b"")
+                return subprocess.CompletedProcess(
+                    command, 0,
+                    stdout=b"200\t192.0.2.10\t192.0.2.20\thttps://example.test/?q=top[alert](1)",
+                    stderr=b"",
+                )
 
             with patch("waf_automation.recheck.subprocess.run", side_effect=fake_run):
                 recheck_records(
@@ -79,10 +83,13 @@ class CorrelationTests(unittest.TestCase):
 
             result = read_jsonl(output)[0]
             header_value = f"{CORRELATION_HEADER}: {result['test_id']}"
+            self.assertIn("--globoff", seen_command)
             self.assertIn("--header", seen_command)
             self.assertIn(header_value, seen_command)
             self.assertTrue(result["correlation_sent"])
             self.assertEqual(result["final_verdict"], "BYPASS_CONFIRMED")
+            self.assertEqual(result["remote_ip"], "192.0.2.10")
+            self.assertIn("top[alert](1)", result["url_effective"])
 
 
 if __name__ == "__main__":
