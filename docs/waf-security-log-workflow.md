@@ -2,27 +2,44 @@
 
 This workflow connects a replayed `nemesida/waf-bypass` case to WAF security telemetry without fuzzy matching on URI or payload.
 
+## Source-of-truth model
+
+`verify` and the WAF security log answer different questions:
+
+- replay HTTP response tells us what the client observed and whether the known origin signature was seen;
+- security telemetry joined by `test_id` tells us what the WAF actually decided, which rules matched, and how much score accumulated.
+
+The replay layer must not infer a WAF decision from an absent `Server` header.
+
+For the current environment the origin is recognized by:
+
+```text
+Server: nginx/1.24.0 (Ubuntu)
+```
+
+A blocked response normally has no `Server` header. That absence is recorded only as `NO_ORIGIN_SIGNATURE`; it is not treated as proof that the WAF blocked the request.
+
 ## Identifiers
 
 The tool uses three identifiers:
 
-- `case_id` — stable identity of the imported request variant. It is derived from `payload_path`, `variant`, and the original cURL hash.
-- `replay_run_id` — unique identity of one `verify`/`recheck` invocation.
-- `test_id` — unique identity of one HTTP replay observation.
+- `case_id` — stable identity of the imported request variant;
+- `replay_run_id` — unique identity of one `verify`/`recheck` invocation;
+- `test_id` — unique identity of one concrete HTTP replay.
 
-During real replay the tool adds this header without changing the stored original cURL:
+During real replay the tool adds:
 
 ```text
-x-waf-fp-test-id: <test_id>
+waf-fp-test-id: <test_id>
 ```
 
-The WAF security log maps `x-waf-fp-test-id` into its `test_id` field, so the primary join is exact:
+The primary correlation is exact:
 
 ```text
 verified.jsonl.test_id == security_log.test_id
 ```
 
-If available, a WAF-generated `x-waf-request-id` can be exported as `x_waf_request_id`, `waf_request_id`, or `request_id`. It is stored as a secondary WAF-side identifier, not used as the primary join key.
+If available, `x-waf-request-id` may be exported as `x_waf_request_id`, `waf_request_id`, or `request_id`. It is secondary evidence, not the primary join key.
 
 ## 1. Import and verify
 
@@ -42,15 +59,45 @@ python waf_bypass_tool.py verify \
   --output work/verified.jsonl
 ```
 
-Each replay record now contains `case_id`, `replay_run_id`, `test_id`, `correlation_header`, and `correlation_sent`.
+Each replay record contains `case_id`, `replay_run_id`, `test_id`, `correlation_header`, and `correlation_sent`.
+
+Real replay also records cURL connection evidence:
+
+```text
+remote_ip
+local_ip
+url_effective
+```
+
+These values help diagnose DNS, proxy, IPv4/IPv6 and routing differences.
+
+### Replay route verdicts
+
+Current route evidence:
+
+- `ORIGIN_CONFIRMED` — response `Server` contains `nginx` or `Ubuntu`;
+- `NO_ORIGIN_SIGNATURE` — no `Server` header was present;
+- `ROUTE_OTHER` — a different non-empty `Server` value was observed;
+- `ROUTE_UNCONFIRMED` — replay itself failed before a usable response was obtained.
+
+There is intentionally no `WAF_CONFIRMED` route inferred from response headers.
+
+### Replay final verdicts
+
+- `BYPASS_CONFIRMED` — non-blocking response and the origin signature is present;
+- `BYPASS_UNCONFIRMED` — non-blocking response without the known origin signature;
+- `HTTP_BLOCK_OBSERVED` — a configured block HTTP code was observed, but response headers do not prove who produced it;
+- `ORIGIN_BLOCK_RESPONSE` — a configured block HTTP code was returned together with the known origin signature;
+- `CHECK_ERROR` — cURL failed or no usable HTTP status was obtained;
+- `DRY_RUN` — request was not sent.
+
+`BLOCKED_BY_WAF` is retained only as a legacy value for previously generated artifacts. New replay runs do not emit it.
 
 ## 2. Export matching WAF security logs
 
 JSONEachRow/JSONL is the recommended exchange format.
 
-### Field contract
-
-Minimum fields required for deterministic coverage diagnosis:
+### Minimum fields for deterministic coverage diagnosis
 
 ```text
 test_id
@@ -62,7 +109,7 @@ verdict
 decision_source
 ```
 
-Strongly recommended context fields:
+Strongly recommended context:
 
 ```text
 client_status
@@ -76,7 +123,7 @@ content_type_detected
 x_waf_request_id
 ```
 
-Optional/redundant fields:
+Optional fallback telemetry:
 
 ```text
 rule_numbers
@@ -84,37 +131,9 @@ scores
 vendors
 ```
 
-`rule_details` is the primary source for rule ID, score and vendor. `rule_numbers`, `scores`, and `vendors` are only fallback telemetry and may be omitted if `rule_details` is reliable.
+`rule_details` is the primary source for rule ID, score and vendor. The three arrays above are used only as fallback.
 
-Extra fields are harmless. Unknown keys in security-log rows are ignored by the current normalizer, so it is safer to export a slightly wider row than to aggressively prune useful context.
-
-### Which rows to export
-
-The preferred selection key is `test_id`, not HTTP status.
-
-For initial bypass analysis, `verified.jsonl` already contains only the replay cases you decided to analyze. Export security-log rows for those `test_id` values, or for the relevant `replay_run_id`/`wba-...` ID prefix. This still yields only the bypass test population while avoiding assumptions about `client_status`, origin responses, monitor/shadow modes, or non-standard block codes.
-
-Do not make `client_status != 403` the permanent correlation contract. That filter is acceptable as a temporary convenience for the first bypass-only analysis, but it breaks the later `validate-fix` workflow because successfully fixed cases are expected to become blocked. The stable contract is always:
-
-```text
-replay test_id -> security-log test_id
-```
-
-Extra security-log rows are allowed and are reported as orphan rows.
-
-The parser accepts:
-
-- JSONEachRow / JSONL;
-- a JSON array of row objects;
-- a JSON object containing a `rows`, `data`, or `result` array.
-
-`rule_details` accepts both native JSON arrays and ClickHouse-style string representations such as:
-
-```text
-[('1019',7,'baseline-handwritten'),('941210',5,'crs4')]
-```
-
-If `rule_details` is absent or cannot produce rule objects, the tool falls back to the index-correlated `rule_numbers`, `scores`, and `vendors` arrays.
+Prefer selecting rows by `test_id` or a `replay_run_id` prefix, not by `client_status`. Filtering permanently on `client_status != 403` would discard successfully fixed cases during later validation.
 
 ## 3. Correlate replay and security log
 
@@ -127,20 +146,10 @@ python waf_bypass_tool.py correlate-logs \
 
 Correlation statuses:
 
-- `MATCHED` — exactly one security-log row matched the `test_id`;
-- `LOG_NOT_FOUND` — replay has a `test_id`, but no log row was found;
+- `MATCHED` — exactly one row matched the `test_id`;
+- `LOG_NOT_FOUND` — no matching row exists;
 - `MISSING_REPLAY_TEST_ID` — legacy replay record has no correlation ID;
-- `MULTIPLE_LOG_MATCHES` — more than one security-log row has the same `test_id`; no row is selected silently.
-
-A matched observation contains normalized `security_log.matched_rules` objects:
-
-```json
-{
-  "rule_id": "2084",
-  "score": 5,
-  "vendor": "baseline-handwritten"
-}
-```
+- `MULTIPLE_LOG_MATCHES` — duplicate `test_id` rows exist and no match is selected silently.
 
 ## 4. Diagnose observations
 
@@ -150,25 +159,64 @@ python waf_bypass_tool.py diagnose \
   --output work/diagnosed.jsonl
 ```
 
+Security-log verdict is authoritative for WAF behavior.
+
 Current diagnoses:
 
-- `BLOCKED` — WAF security telemetry confirms a block by the rule-engine path;
-- `BLOCKED_OTHER_SOURCE` — blocked, but `RuleEngine` is not a reported decision source;
-- `WOULD_BLOCK` — threshold was reached or WAF explicitly returned `ShadowWouldBlock`, but policy/mode did not enforce the block;
-- `SCORING_GAP` — one or more rules detected the request, but accumulated score remained below threshold;
-- `DETECTION_GAP` — anomaly score is zero and no matched rules exist;
-- `ROUTE_MISMATCH` — replay routing result is inconsistent;
-- `LOG_NOT_FOUND` — no unique telemetry row was available;
+- `BLOCKED` — security telemetry confirms WAF block;
+- `BLOCKED_OTHER_SOURCE` — request was blocked but `RuleEngine` is not a decision source;
+- `WOULD_BLOCK` — threshold was reached or `ShadowWouldBlock` was reported without enforced block;
+- `SCORING_GAP` — rules matched but accumulated score stayed below threshold;
+- `DETECTION_GAP` — no rule contributed score;
+- `ROUTE_MISMATCH` — retained for legacy replay artifacts;
+- `LOG_NOT_FOUND` — no unique telemetry row exists;
 - `CHECK_ERROR` — replay failed;
-- `NEEDS_REVIEW` — telemetry is ambiguous, incomplete, duplicated, or internally inconsistent.
+- `NEEDS_REVIEW` — replay/security telemetry is ambiguous or contradictory.
 
-The command prints aggregate counts and counts by attack category and writes the diagnosis plus a human-readable `diagnosis_reason` back into each JSONL record.
+Examples:
 
-## 5. Export a neutral corpus for waf-rule-engineering
+```text
+HTTP 403 + no Server + security verdict Block
+    -> BLOCKED
 
-The automation project deliberately does not generate YAML rules or DSL-specific inline tests. Instead it emits a neutral evidence corpus that `waf-rule-engineering` can consume using its own DSL documentation and rule-design methodology.
+HTTP 403 + no Server + security verdict Allow + score 0
+    -> DETECTION_GAP
+    (the HTTP block came from somewhere else; WAF did not detect it)
 
-By default only the two actionable rule-engineering classes are exported:
+HTTP 200 + nginx + security verdict Allow + score 5 / threshold 7
+    -> SCORING_GAP
+
+HTTP 200 + nginx + security verdict Block
+    -> NEEDS_REVIEW
+    (origin evidence contradicts WAF Block telemetry)
+```
+
+## 5. validate-fix semantics
+
+New replay results no longer mark a case `FIXED` solely because a block-like HTTP status was observed.
+
+For new artifacts:
+
+```text
+HTTP_BLOCK_OBSERVED  -> NEEDS_REVIEW until security telemetry is correlated
+ORIGIN_BLOCK_RESPONSE -> NEEDS_REVIEW
+BYPASS_CONFIRMED     -> STILL_BYPASSED
+CHECK_ERROR          -> ERROR
+```
+
+Legacy `BLOCKED_BY_WAF` remains readable as `FIXED` for backward compatibility, but new runs do not generate that verdict.
+
+The intended authoritative post-fix flow is therefore:
+
+```text
+validate/replay
+    -> correlate-logs
+    -> diagnose
+```
+
+A case is confirmed blocked by the WAF only when the joined security log says `Block`.
+
+## 6. Export neutral evidence to waf-rule-engineering
 
 ```bash
 python waf_bypass_tool.py export-corpus \
@@ -176,64 +224,11 @@ python waf_bypass_tool.py export-corpus \
   --output-dir work/rule-engineering-corpus
 ```
 
-Default diagnoses:
+Default export includes:
 
 ```text
 DETECTION_GAP
 SCORING_GAP
 ```
 
-To export another class explicitly, repeat `--diagnosis`:
-
-```bash
-python waf_bypass_tool.py export-corpus \
-  --input work/diagnosed.jsonl \
-  --diagnosis DETECTION_GAP \
-  --diagnosis SCORING_GAP \
-  --diagnosis BLOCKED \
-  --output-dir work/rule-engineering-corpus
-```
-
-Output:
-
-```text
-cases.jsonl
-manifest.json
-detection-gap.jsonl
-scoring-gap.jsonl
-...additional selected diagnosis files
-```
-
-Each handoff case preserves:
-
-- stable `case_id` and concrete replay `test_id`;
-- source payload file/category/group/variant;
-- raw and normalized payload plus normalization trace;
-- exact stored cURL and request metadata;
-- replay HTTP/routing result;
-- WAF threshold, anomaly score, verdict, mode and matched-rule evidence;
-- diagnosis and recommended workstream.
-
-Examples of recommended workstreams:
-
-```text
-DETECTION_GAP -> detection-design
-SCORING_GAP   -> scoring-review
-BLOCKED       -> regression-reference
-WOULD_BLOCK   -> policy-review
-```
-
-The manifest explicitly records that automatic rule generation is disabled.
-
-## Intended handoff to waf-rule-engineering
-
-The diagnosed/exported corpus is evidence, not an automatic rule generator. In particular:
-
-- `DETECTION_GAP` cases are candidates for new/expanded detection primitives and corresponding regression tests;
-- `SCORING_GAP` cases should first trigger scoring/combination review rather than blind regex expansion;
-- `WOULD_BLOCK` cases usually indicate policy/mode behavior rather than missing detection;
-- `BLOCKED` cases are useful as positive regression references after a fix;
-- `BLOCKED_OTHER_SOURCE` should not be counted as successful coverage by the YAML ruleset without further review;
-- `NEEDS_REVIEW` must not be automatically converted into rule changes.
-
-`case_id` is the cross-project identity. Once a case is represented as a YAML inline/regression test inside `waf-rule-engineering`, that identity should be preserved in test metadata or comments so later replay results can be compared back to the original evidence.
+The handoff remains evidence rather than automatic YAML generation. `waf-rule-engineering` stays the source of truth for DSL-specific rules and tests.
