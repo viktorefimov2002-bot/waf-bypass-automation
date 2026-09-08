@@ -41,8 +41,12 @@ def evidence_status(record: dict[str, Any]) -> str:
         return "PARTIAL"
     if diagnosis == "WOULD_BLOCK":
         return "WOULD_BLOCK"
-    if diagnosis in {"BLOCKED", "BLOCKED_OTHER_SOURCE"}:
+    if diagnosis == "BLOCKED":
         return "BLOCKED"
+    if diagnosis == "BLOCKED_OTHER_SOURCE":
+        # A non-rule-engine block is not evidence that the relevant WAF detector
+        # recognized the attack primitive.
+        return "REVIEW"
     return "REVIEW"
 
 
@@ -51,21 +55,40 @@ def _cluster_id(payload_path: str) -> str:
     return f"wba-gap-{digest}"
 
 
+def _normalized_payload(record: dict[str, Any]) -> str | None:
+    value = record.get("normalized_payload")
+    if value is None:
+        return None
+    text = str(value)
+    return text if text else None
+
+
 def _contrast(
     records: list[dict[str, Any]],
     *,
     fixed_field: str,
     variable_field: str,
 ) -> list[dict[str, Any]]:
-    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    """Find comparative detection contrasts for semantically equivalent cases.
+
+    A payload_path alone is not sufficient proof that two replay variants expose
+    the same value to the WAF. Different targets can introduce parameter names,
+    URI prefixes, or extraction artifacts. Therefore a normalization/target
+    contrast is emitted only when the compared cases also have the exact same
+    normalized_payload.
+    """
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
     for record in records:
         if evidence_status(record) == "UNUSABLE":
             continue
+        payload = _normalized_payload(record)
+        if payload is None:
+            continue
         fixed = str(record.get(fixed_field) or "UNKNOWN")
-        grouped[fixed].append(record)
+        grouped[(fixed, payload)].append(record)
 
     contrasts: list[dict[str, Any]] = []
-    for fixed_value, group in sorted(grouped.items()):
+    for (fixed_value, payload), group in sorted(grouped.items()):
         variable_values = {str(record.get(variable_field) or "UNKNOWN") for record in group}
         if len(variable_values) < 2:
             continue
@@ -82,6 +105,7 @@ def _contrast(
         if no_detection and positive:
             contrasts.append({
                 fixed_field: fixed_value,
+                "normalized_payload": payload,
                 f"{variable_field}_no_detection": no_detection,
                 f"{variable_field}_positive_detection": positive,
             })
@@ -125,10 +149,11 @@ def analyze_cluster(payload_path: str, records: list[dict[str, Any]]) -> dict[st
     scores = [score for score in (_score(record) for record in records) if score is not None]
     thresholds = sorted({threshold for threshold in (_threshold(record) for record in records) if threshold is not None})
     matched_rule_ids = sorted({rule_id for record in records for rule_id in _rule_ids(record)})
+    normalized_payloads = sorted({payload for payload in (_normalized_payload(record) for record in records) if payload is not None})
     workstreams = _workstreams(flags)
 
     return {
-        "cluster_schema_version": 1,
+        "cluster_schema_version": 2,
         "cluster_id": _cluster_id(payload_path),
         "payload_path": payload_path,
         "category": records[0].get("category") if records else None,
@@ -138,6 +163,7 @@ def analyze_cluster(payload_path: str, records: list[dict[str, Any]]) -> dict[st
         "evidence_statuses": dict(sorted(Counter(statuses).items())),
         "zones": sorted({str(record.get("zone") or "UNKNOWN") for record in records}),
         "encodings": sorted({str(record.get("encoding") or "UNKNOWN") for record in records}),
+        "normalized_payload_variant_count": len(normalized_payloads),
         "score_min": min(scores) if scores else None,
         "score_max": max(scores) if scores else None,
         "thresholds": thresholds,
@@ -148,8 +174,8 @@ def analyze_cluster(payload_path: str, records: list[dict[str, Any]]) -> dict[st
         "normalization_contrasts": normalization_contrasts,
         "target_contrasts": target_contrasts,
         "interpretation": {
-            "normalization_gap_candidate": "Same payload and target zone has no detection for one encoding but positive detection for another. This is comparative evidence, not proof of a decoder defect.",
-            "target_gap_candidate": "Same payload and encoding has no detection in one target zone but positive detection in another. This is comparative evidence, not proof that all zones should share identical rules.",
+            "normalization_gap_candidate": "Same source payload, target zone, and normalized payload has no detection for one encoding but positive detection for another. This is comparative evidence, not proof of a decoder defect.",
+            "target_gap_candidate": "Same source payload, encoding, and normalized payload has no detection in one target zone but positive detection in another. This is comparative evidence, not proof that all zones should share identical rules.",
             "partial_detection_candidate": "A weak score (1-2) was observed. Do not raise its score automatically; first verify that the matched rule is relevant to the attack primitive.",
             "scoring_review_candidate": "A stronger below-threshold score was observed. Rule relevance still must be checked before treating this as a true scoring-only gap.",
         },
@@ -225,7 +251,7 @@ def analyze_gap_clusters(input_path: Path, output_dir: Path) -> dict[str, Any]:
         files[flag] = str(path)
 
     manifest = {
-        "gap_analysis_schema_version": 1,
+        "gap_analysis_schema_version": 2,
         "source": str(input_path),
         "cases": len(records),
         "clusters": len(clusters),
@@ -236,6 +262,7 @@ def analyze_gap_clusters(input_path: Path, output_dir: Path) -> dict[str, Any]:
         "files": files,
         "policy": {
             "comparison_unit": "payload_path",
+            "comparative_gap_requires_equal_normalized_payload": True,
             "automatic_rule_generation": False,
             "automatic_score_increase": False,
             "normalization_and_target_labels_are_candidates": True,
