@@ -13,10 +13,10 @@ The tool uses three identifiers:
 During real replay the tool adds this header without changing the stored original cURL:
 
 ```text
-waf-fp-test-id: <test_id>
+x-waf-fp-test-id: <test_id>
 ```
 
-The WAF security log exposes that header as `test_id`, so the primary join is exact:
+The WAF security log maps `x-waf-fp-test-id` into its `test_id` field, so the primary join is exact:
 
 ```text
 verified.jsonl.test_id == security_log.test_id
