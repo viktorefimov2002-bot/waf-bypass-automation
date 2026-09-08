@@ -56,7 +56,7 @@ class ValidateFixProgressTests(unittest.TestCase):
                 "transforms": ["t:none", "t:lowercase"],
             }]}), encoding="utf-8")
 
-            def fake_execute(_record, _timeout):
+            def fake_execute(_record, _timeout, _test_id):
                 return {
                     "checked_at": "2026-07-27T00:00:00+00:00",
                     "http_code": 403,
@@ -67,6 +67,7 @@ class ValidateFixProgressTests(unittest.TestCase):
                     "duration_ms": 12,
                     "curl_exit_code": 0,
                     "stderr": "",
+                    "correlation_sent": True,
                 }
 
             stderr = StringIO()
@@ -92,6 +93,7 @@ class ValidateFixProgressTests(unittest.TestCase):
             self.assertIn("[1/1] replay XSS/1.json::ARGS", stderr.getvalue())
             replayed = read_jsonl(root / "fix-validation.replayed.jsonl")
             self.assertEqual(replayed[0]["final_verdict"], "BLOCKED_BY_WAF")
+            self.assertTrue(replayed[0]["test_id"])
 
     def test_empty_coverage_match_fails_before_replay(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
