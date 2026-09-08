@@ -19,7 +19,7 @@ SAFE_OPTIONS_WITH_VALUE = {
     "-X", "--request", "-H", "--header", "-d", "--data", "--data-raw", "--data-binary", "--data-urlencode",
     "--cookie", "--user-agent", "--referer",
 }
-SAFE_FLAG_OPTIONS = {"--compressed", "-k", "--insecure", "--http1.1", "--http2", "--path-as-is"}
+SAFE_FLAG_OPTIONS = {"--compressed", "-k", "--insecure", "--http1.1", "--http2", "--path-as-is", "-g", "--globoff"}
 CONFIRMED_BYPASS_VERDICTS = {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
 
 
@@ -134,6 +134,7 @@ def _execute(record: dict[str, Any], timeout: float, test_id: str) -> dict[str, 
     validate_replay_argv(argv)
     with tempfile.NamedTemporaryFile(prefix="waf-headers-", suffix=".txt") as header_file:
         command = argv + [
+            "--globoff",
             "--header", f"{CORRELATION_HEADER}: {test_id}",
             "--silent", "--show-error", "--output", "/dev/null", "--dump-header", header_file.name,
             "--write-out", "%{http_code}\t%{remote_ip}\t%{local_ip}\t%{url_effective}",
