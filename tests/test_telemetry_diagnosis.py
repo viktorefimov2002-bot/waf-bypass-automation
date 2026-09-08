@@ -85,7 +85,7 @@ class TelemetryDiagnosisTests(unittest.TestCase):
             self.assertIsNone(record["security_log"])
             self.assertEqual(len(record["security_log_matches"]), 2)
 
-    def _observation(self, **log_values):
+    def _observation(self, *, final_verdict="BYPASS_CONFIRMED", **log_values):
         log = {
             "verdict": "Allow",
             "runtime_blocking_mode": "block",
@@ -97,13 +97,13 @@ class TelemetryDiagnosisTests(unittest.TestCase):
         log.update(log_values)
         return {
             "correlation_status": "MATCHED",
-            "final_verdict": "BYPASS_CONFIRMED",
+            "final_verdict": final_verdict,
             "security_log": log,
         }
 
     def test_diagnosis_matrix(self) -> None:
         diagnosis, _ = diagnose_observation(self._observation(
-            verdict="Block", anomaly_score=7,
+            final_verdict="BLOCKED_BY_WAF", verdict="Block", anomaly_score=7,
             matched_rules=[{"rule_id": "100", "score": 7, "vendor": "yaml"}],
         ))
         self.assertEqual(diagnosis, "BLOCKED")
@@ -128,9 +128,14 @@ class TelemetryDiagnosisTests(unittest.TestCase):
         self.assertEqual(diagnosis, "NEEDS_REVIEW")
 
         diagnosis, _ = diagnose_observation(self._observation(
-            verdict="Block", anomaly_score=0, decision_source=["RateLimiter"],
+            final_verdict="BLOCKED_BY_WAF", verdict="Block", anomaly_score=0, decision_source=["RateLimiter"],
         ))
         self.assertEqual(diagnosis, "BLOCKED_OTHER_SOURCE")
+
+        diagnosis, _ = diagnose_observation(self._observation(
+            verdict="Block", anomaly_score=7,
+        ))
+        self.assertEqual(diagnosis, "NEEDS_REVIEW")
 
     def test_diagnose_writes_summary_and_records(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
