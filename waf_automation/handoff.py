@@ -52,10 +52,32 @@ def _compact_waf_evidence(log: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _compact_gap_analysis(record: dict[str, Any]) -> dict[str, Any] | None:
+    analysis = record.get("gap_analysis")
+    if not isinstance(analysis, dict):
+        return None
+    return {
+        "cluster_id": analysis.get("cluster_id"),
+        "evidence_status": analysis.get("evidence_status"),
+        "cluster_flags": analysis.get("cluster_flags") or [],
+        "recommended_workstreams": analysis.get("recommended_workstreams") or [],
+        "primary_workstream": analysis.get("primary_workstream"),
+        "score": analysis.get("score"),
+        "threshold": analysis.get("threshold"),
+        "matched_rule_ids": analysis.get("matched_rule_ids") or [],
+    }
+
+
 def build_handoff_case(record: dict[str, Any]) -> dict[str, Any]:
     diagnosis = str(record.get("diagnosis") or "NEEDS_REVIEW")
     log = record.get("security_log") or {}
-    return {
+    gap_analysis = _compact_gap_analysis(record)
+    recommended_workstream = (
+        gap_analysis.get("primary_workstream")
+        if gap_analysis and gap_analysis.get("primary_workstream")
+        else WORKSTREAM_BY_DIAGNOSIS.get(diagnosis, "manual-review")
+    )
+    case = {
         "handoff_schema_version": HANDOFF_SCHEMA_VERSION,
         "case_id": record.get("case_id"),
         "test_id": record.get("test_id"),
@@ -73,7 +95,7 @@ def build_handoff_case(record: dict[str, Any]) -> dict[str, Any]:
         "expected_outcome": "block",
         "diagnosis": diagnosis,
         "diagnosis_reason": record.get("diagnosis_reason"),
-        "recommended_workstream": WORKSTREAM_BY_DIAGNOSIS.get(diagnosis, "manual-review"),
+        "recommended_workstream": recommended_workstream,
         "payload": {
             "zone": record.get("zone"),
             "encoding": record.get("encoding"),
@@ -92,9 +114,15 @@ def build_handoff_case(record: dict[str, Any]) -> dict[str, Any]:
             "server_header": record.get("server_header"),
             "route_verdict": record.get("route_verdict"),
             "final_verdict": record.get("final_verdict"),
+            "remote_ip": record.get("remote_ip"),
+            "local_ip": record.get("local_ip"),
+            "url_effective": record.get("url_effective"),
         },
         "waf_evidence": _compact_waf_evidence(log),
     }
+    if gap_analysis:
+        case["gap_analysis"] = gap_analysis
+    return case
 
 
 def export_rule_engineering_corpus(
@@ -110,6 +138,7 @@ def export_rule_engineering_corpus(
     selected: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     by_category: dict[str, Counter[str]] = defaultdict(Counter)
+    by_workstream: Counter[str] = Counter()
 
     for record in records:
         diagnosis = str(record.get("diagnosis") or "").upper()
@@ -118,6 +147,7 @@ def export_rule_engineering_corpus(
         case = build_handoff_case(record)
         selected.append(case)
         counts[diagnosis] += 1
+        by_workstream[str(case.get("recommended_workstream") or "manual-review")] += 1
         category = str((case.get("source") or {}).get("category") or "UNKNOWN")
         by_category[category][diagnosis] += 1
 
@@ -140,6 +170,7 @@ def export_rule_engineering_corpus(
         "selected_diagnoses": sorted(selected_diagnoses),
         "records": len(selected),
         "diagnoses": dict(sorted(counts.items())),
+        "recommended_workstreams": dict(sorted(by_workstream.items())),
         "by_category": {
             category: dict(sorted(category_counts.items()))
             for category, category_counts in sorted(by_category.items())
@@ -148,8 +179,10 @@ def export_rule_engineering_corpus(
         "consumer": "waf-rule-engineering",
         "policy": {
             "automatic_rule_generation": False,
+            "automatic_score_increase": False,
             "detection_gap": "design or extend detection logic and add regression tests",
-            "scoring_gap": "review scoring before changing detection patterns",
+            "scoring_gap": "treat as a preliminary diagnosis; use comparative gap analysis and rule metadata before changing score",
+            "gap_analysis": "when present, preserve behavior-based cluster evidence and use its workstream before the coarse diagnosis label",
         },
     }
     manifest_path = output_dir / "manifest.json"
