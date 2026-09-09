@@ -8,7 +8,7 @@ from typing import Any, Iterable
 from .common import read_jsonl, write_json, write_jsonl
 
 
-HANDOFF_SCHEMA_VERSION = 2
+HANDOFF_SCHEMA_VERSION = 3
 DEFAULT_DIAGNOSES = {"DETECTION_GAP", "SCORING_GAP"}
 
 WORKSTREAM_BY_DIAGNOSIS = {
@@ -74,6 +74,11 @@ def _compact_payload_classification(record: dict[str, Any]) -> dict[str, Any] | 
         return None
     return {
         "cluster_schema_version": classification.get("cluster_schema_version"),
+        "attack_family": classification.get("attack_family"),
+        "attack_family_source": classification.get("attack_family_source"),
+        "detected_primitives": classification.get("detected_primitives") or [],
+        "primary_primitive": classification.get("primary_primitive"),
+        "structural_tags": classification.get("structural_tags") or [],
         "source_cluster_id": classification.get("source_cluster_id"),
         "semantic_cluster_id": classification.get("semantic_cluster_id"),
         "structural_cluster_id": classification.get("structural_cluster_id"),
@@ -159,6 +164,8 @@ def export_rule_engineering_corpus(
     selected: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     by_category: dict[str, Counter[str]] = defaultdict(Counter)
+    by_family: dict[str, Counter[str]] = defaultdict(Counter)
+    by_primitive: dict[str, Counter[str]] = defaultdict(Counter)
     by_workstream: Counter[str] = Counter()
     source_clusters: set[str] = set()
     semantic_clusters: set[str] = set()
@@ -175,6 +182,10 @@ def export_rule_engineering_corpus(
         category = str((case.get("source") or {}).get("category") or "UNKNOWN")
         by_category[category][diagnosis] += 1
         classification = case.get("classification") or {}
+        family = str(classification.get("attack_family") or "unknown")
+        primitive = str(classification.get("primary_primitive") or "unresolved_primitive")
+        by_family[family][diagnosis] += 1
+        by_primitive[primitive][diagnosis] += 1
         for key, target in (
             ("source_cluster_id", source_clusters),
             ("semantic_cluster_id", semantic_clusters),
@@ -197,6 +208,9 @@ def export_rule_engineering_corpus(
         write_jsonl(path, diagnosis_records)
         files[diagnosis] = str(path)
 
+    def _nested_counts(values: dict[str, Counter[str]]) -> dict[str, dict[str, int]]:
+        return {key: dict(sorted(counter.items())) for key, counter in sorted(values.items())}
+
     manifest = {
         "handoff_schema_version": HANDOFF_SCHEMA_VERSION,
         "source": str(input_path),
@@ -207,10 +221,9 @@ def export_rule_engineering_corpus(
         "source_clusters": len(source_clusters),
         "semantic_clusters": len(semantic_clusters),
         "structural_clusters": len(structural_clusters),
-        "by_category": {
-            category: dict(sorted(category_counts.items()))
-            for category, category_counts in sorted(by_category.items())
-        },
+        "by_category": _nested_counts(by_category),
+        "by_attack_family": _nested_counts(by_family),
+        "by_primary_primitive": _nested_counts(by_primitive),
         "files": files,
         "consumer": "waf-rule-engineering",
         "policy": {
@@ -219,7 +232,7 @@ def export_rule_engineering_corpus(
             "detection_gap": "design or extend detection logic and add regression tests",
             "scoring_gap": "treat as a preliminary diagnosis; use comparative gap analysis and rule metadata before changing score",
             "gap_analysis": "when present, preserve behavior-based cluster evidence and use its workstream before the coarse diagnosis label",
-            "clustering": "source_cluster_id is the authoritative scanner testcase family; semantic and structural clusters are best-effort similarity layers",
+            "clustering": "source cluster tracks scanner testcase family; semantic/structural clusters, attack family and coarse primitive provide cross-transport grouping for rule engineering",
         },
     }
     manifest_path = output_dir / "manifest.json"
