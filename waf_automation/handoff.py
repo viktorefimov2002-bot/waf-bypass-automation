@@ -8,7 +8,7 @@ from typing import Any, Iterable
 from .common import read_jsonl, write_json, write_jsonl
 
 
-HANDOFF_SCHEMA_VERSION = 1
+HANDOFF_SCHEMA_VERSION = 3
 DEFAULT_DIAGNOSES = {"DETECTION_GAP", "SCORING_GAP"}
 
 WORKSTREAM_BY_DIAGNOSIS = {
@@ -68,10 +68,34 @@ def _compact_gap_analysis(record: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _compact_payload_classification(record: dict[str, Any]) -> dict[str, Any] | None:
+    classification = record.get("payload_classification")
+    if not isinstance(classification, dict):
+        return None
+    return {
+        "cluster_schema_version": classification.get("cluster_schema_version"),
+        "attack_family": classification.get("attack_family"),
+        "attack_family_source": classification.get("attack_family_source"),
+        "detected_primitives": classification.get("detected_primitives") or [],
+        "primary_primitive": classification.get("primary_primitive"),
+        "structural_tags": classification.get("structural_tags") or [],
+        "source_cluster_id": classification.get("source_cluster_id"),
+        "semantic_cluster_id": classification.get("semantic_cluster_id"),
+        "structural_cluster_id": classification.get("structural_cluster_id"),
+        "semantic_payload": classification.get("semantic_payload"),
+        "structure_signature": classification.get("structure_signature"),
+        "techniques": classification.get("techniques") or [],
+        "normalization_profile": classification.get("normalization_profile") or [],
+        "placement": classification.get("placement"),
+        "transport_encoding": classification.get("transport_encoding"),
+    }
+
+
 def build_handoff_case(record: dict[str, Any]) -> dict[str, Any]:
     diagnosis = str(record.get("diagnosis") or "NEEDS_REVIEW")
     log = record.get("security_log") or {}
     gap_analysis = _compact_gap_analysis(record)
+    payload_classification = _compact_payload_classification(record)
     recommended_workstream = (
         gap_analysis.get("primary_workstream")
         if gap_analysis and gap_analysis.get("primary_workstream")
@@ -122,6 +146,8 @@ def build_handoff_case(record: dict[str, Any]) -> dict[str, Any]:
     }
     if gap_analysis:
         case["gap_analysis"] = gap_analysis
+    if payload_classification:
+        case["classification"] = payload_classification
     return case
 
 
@@ -138,7 +164,12 @@ def export_rule_engineering_corpus(
     selected: list[dict[str, Any]] = []
     counts: Counter[str] = Counter()
     by_category: dict[str, Counter[str]] = defaultdict(Counter)
+    by_family: dict[str, Counter[str]] = defaultdict(Counter)
+    by_primitive: dict[str, Counter[str]] = defaultdict(Counter)
     by_workstream: Counter[str] = Counter()
+    source_clusters: set[str] = set()
+    semantic_clusters: set[str] = set()
+    structural_clusters: set[str] = set()
 
     for record in records:
         diagnosis = str(record.get("diagnosis") or "").upper()
@@ -150,6 +181,19 @@ def export_rule_engineering_corpus(
         by_workstream[str(case.get("recommended_workstream") or "manual-review")] += 1
         category = str((case.get("source") or {}).get("category") or "UNKNOWN")
         by_category[category][diagnosis] += 1
+        classification = case.get("classification") or {}
+        family = str(classification.get("attack_family") or "unknown")
+        primitive = str(classification.get("primary_primitive") or "unresolved_primitive")
+        by_family[family][diagnosis] += 1
+        by_primitive[primitive][diagnosis] += 1
+        for key, target in (
+            ("source_cluster_id", source_clusters),
+            ("semantic_cluster_id", semantic_clusters),
+            ("structural_cluster_id", structural_clusters),
+        ):
+            value = classification.get(key)
+            if value:
+                target.add(str(value))
 
     output_dir.mkdir(parents=True, exist_ok=True)
     all_path = output_dir / "cases.jsonl"
@@ -164,6 +208,9 @@ def export_rule_engineering_corpus(
         write_jsonl(path, diagnosis_records)
         files[diagnosis] = str(path)
 
+    def _nested_counts(values: dict[str, Counter[str]]) -> dict[str, dict[str, int]]:
+        return {key: dict(sorted(counter.items())) for key, counter in sorted(values.items())}
+
     manifest = {
         "handoff_schema_version": HANDOFF_SCHEMA_VERSION,
         "source": str(input_path),
@@ -171,10 +218,12 @@ def export_rule_engineering_corpus(
         "records": len(selected),
         "diagnoses": dict(sorted(counts.items())),
         "recommended_workstreams": dict(sorted(by_workstream.items())),
-        "by_category": {
-            category: dict(sorted(category_counts.items()))
-            for category, category_counts in sorted(by_category.items())
-        },
+        "source_clusters": len(source_clusters),
+        "semantic_clusters": len(semantic_clusters),
+        "structural_clusters": len(structural_clusters),
+        "by_category": _nested_counts(by_category),
+        "by_attack_family": _nested_counts(by_family),
+        "by_primary_primitive": _nested_counts(by_primitive),
         "files": files,
         "consumer": "waf-rule-engineering",
         "policy": {
@@ -183,6 +232,7 @@ def export_rule_engineering_corpus(
             "detection_gap": "design or extend detection logic and add regression tests",
             "scoring_gap": "treat as a preliminary diagnosis; use comparative gap analysis and rule metadata before changing score",
             "gap_analysis": "when present, preserve behavior-based cluster evidence and use its workstream before the coarse diagnosis label",
+            "clustering": "source cluster tracks scanner testcase family; semantic/structural clusters, attack family and coarse primitive provide cross-transport grouping for rule engineering",
         },
     }
     manifest_path = output_dir / "manifest.json"

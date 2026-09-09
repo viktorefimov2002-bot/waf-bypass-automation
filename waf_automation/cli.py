@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
+from .clustering import cluster_records
 from .diagnosis import diagnose_observations
 from .diffing import diff_runs
 from .gap_analysis import analyze_gap_clusters
@@ -52,6 +53,13 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--groups", required=True, type=_path)
     command.add_argument("--taxonomy", type=_path)
     command.add_argument("--overrides", type=_path, help="Legacy fallback for categories not present in taxonomy.json")
+    command.add_argument("--output", required=True, type=_path)
+
+    command = subparsers.add_parser(
+        "cluster-cases",
+        help="Add generic source, semantic, structural and technique classification to JSONL cases",
+    )
+    command.add_argument("--input", required=True, type=_path)
     command.add_argument("--output", required=True, type=_path)
 
     command = subparsers.add_parser("report", help="Create a compact XLSX report from JSONL")
@@ -153,6 +161,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "import":
         result = import_report(args.report, args.groups, args.output, args.taxonomy, args.overrides)
+    elif args.command == "cluster-cases":
+        result = cluster_records(args.input, args.output)
     elif args.command == "report":
         if args.groups:
             result = create_report(args.input, args.groups, args.output, args.taxonomy)

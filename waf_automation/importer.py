@@ -29,8 +29,8 @@ def import_report(
     target = str(report.get("TARGET", ""))
     block_codes = normalize_block_codes(report.get("BLOCK-CODE", [403]))
     records: list[dict[str, Any]] = []
+    import_errors: list[dict[str, Any]] = []
 
-    missing_curls: list[str] = []
     for payload_path in sorted(bypassed):
         category = payload_path.split("/", 1)[0]
         results = bypassed[payload_path]
@@ -40,17 +40,48 @@ def import_report(
         classification = classify(payload_path, category, groups, category_defaults, overrides)
         for variant in sorted(results):
             command = curl_variants.get(variant)
-            if not command:
-                missing_curls.append(f"{payload_path}::{variant}")
-                continue
             zone, encoding = parse_variant(variant)
-            request = extract_request(command)
-            payload = extract_payload_details(request, zone)
-            raw_payload = str(payload["value"])
-            normalization = normalize_payload_details(raw_payload, encoding)
+            if not command:
+                import_errors.append({
+                    "schema_version": SCHEMA_VERSION,
+                    "run_id": run_id,
+                    "payload_path": payload_path,
+                    "category": category,
+                    "variant": variant,
+                    "zone": zone,
+                    "encoding": encoding,
+                    "error_type": "MISSING_CURL",
+                    "error": "Report has a bypass result but no matching cURL command",
+                    **classification,
+                })
+                continue
+
+            command_hash = curl_hash(command)
+            try:
+                request = extract_request(command)
+                payload = extract_payload_details(request, zone)
+                raw_payload = str(payload["value"])
+                normalization = normalize_payload_details(raw_payload, encoding)
+            except ValueError as error:
+                import_errors.append({
+                    "schema_version": SCHEMA_VERSION,
+                    "run_id": run_id,
+                    "case_id": make_case_id(payload_path, variant, command_hash),
+                    "payload_path": payload_path,
+                    "category": category,
+                    "variant": variant,
+                    "zone": zone,
+                    "encoding": encoding,
+                    "curl": command,
+                    "curl_hash": command_hash,
+                    "error_type": "CURL_PARSE_ERROR",
+                    "error": str(error),
+                    **classification,
+                })
+                continue
+
             response_raw = results[variant]
             http_code = parse_response_code(response_raw)
-            command_hash = curl_hash(command)
             record = {
                 "schema_version": SCHEMA_VERSION,
                 "run_id": run_id,
@@ -87,15 +118,18 @@ def import_report(
             }
             records.append(record)
 
-    if missing_curls:
-        sample = ", ".join(missing_curls[:5])
-        raise ValueError(f"Missing cURL for {len(missing_curls)} bypass variants: {sample}")
     write_jsonl(output_path, records)
+    errors_path = output_path.with_name(f"{output_path.stem}.import-errors.jsonl")
+    write_jsonl(errors_path, import_errors)
     return {
         "run_id": run_id,
         "payload_files": len({record["payload_path"] for record in records}),
         "variants": len(records),
         "groups": len(groups),
         "block_codes": block_codes,
+        "import_errors": len(import_errors),
+        "curl_parse_errors": sum(1 for row in import_errors if row.get("error_type") == "CURL_PARSE_ERROR"),
+        "missing_curls": sum(1 for row in import_errors if row.get("error_type") == "MISSING_CURL"),
         "output": str(output_path),
+        "errors_output": str(errors_path),
     }
