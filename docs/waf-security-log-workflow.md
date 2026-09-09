@@ -90,6 +90,15 @@ python waf_bypass_tool.py verify \
 
 `--only-verdict` may be repeated when several prior replay verdicts should be selected.
 
+After correlating and diagnosing a targeted retry, replace the old cases by stable `case_id`:
+
+```bash
+python waf_bypass_tool.py merge-cases \
+  --base work/diagnosed.jsonl \
+  --updates work/diagnosed-retry.jsonl \
+  --output work/diagnosed-complete.jsonl
+```
+
 ### Replay route verdicts
 
 Current route evidence:
@@ -206,6 +215,32 @@ python waf_bypass_tool.py analyze-gaps \
 
 The comparison unit starts from `payload_path`, not an individual replay request. This prevents dozens of ARGS/BODY/COOKIE/HEADER/encoding variants of the same source payload from being treated as independent rule-design requirements.
 
+### Recommended: supply the exact deployed rule pack
+
+For scoring analysis, pass the YAML/JSON ruleset that was actually deployed during the replay:
+
+```bash
+python waf_bypass_tool.py analyze-gaps \
+  --input work/diagnosed-complete.jsonl \
+  --rule-pack /path/to/deployed/generic-request-ruleset.yaml \
+  --output-dir work/gap-analysis
+```
+
+The rule pack is used as metadata only. `analyze-gaps` does not execute, modify, or regenerate rules.
+
+For each `matched_rules` entry it records the deployed rule's name, inferred family, configured score, severity, action, enforcement, tags, confidence tag, and relevance to the testcase category.
+
+Rule relevance statuses:
+
+- `RELEVANT_WEAK_ONLY` — at least one same-family rule matched and every same-family match is explicitly tagged weak/supporting/low-confidence;
+- `RELEVANT_NON_WEAK` — at least one same-family rule matched that is not explicitly weak;
+- `CROSS_FAMILY_ONLY` — telemetry score came only from rules belonging to other attack families;
+- `UNKNOWN_RULE_METADATA` — at least one matched rule ID is absent from the supplied pack and no same-family rule could establish relevance;
+- `NO_MATCHED_RULES` — no rule hit exists;
+- `NOT_EVALUATED` — `--rule-pack` was not supplied.
+
+This distinction is important. An XSS request that scores 4 only because a PHP, LDAP, or NoSQL detector fired is not treated as a true XSS scoring gap. It remains evidence that the request was noticed, but the XSS detector may still have missed the attack primitive.
+
 Output includes:
 
 ```text
@@ -215,10 +250,14 @@ manifest.json
 normalization-gap-candidates.jsonl
 target-gap-candidates.jsonl
 pure-detection-gap-clusters.jsonl
-partial-detection-candidates.jsonl
-scoring-review-candidates.jsonl
+cross-family-detection-candidates.jsonl
+weak-relevant-detection-candidates.jsonl
+relevant-scoring-gap-candidates.jsonl
+unknown-rule-metadata-clusters.jsonl
 replay-error-clusters.jsonl
 ```
+
+Without `--rule-pack`, the backward-compatible coarse files `partial-detection-candidates.jsonl` and `scoring-review-candidates.jsonl` are still produced when applicable.
 
 Behavior evidence classes:
 
@@ -229,22 +268,27 @@ Behavior evidence classes:
 - `UNUSABLE` — replay/log correlation was not usable for comparison;
 - `REVIEW` — evidence that must not be used as positive detector evidence, including `BLOCKED_OTHER_SOURCE`.
 
-Cluster flags are deliberately candidates, not definitive root-cause claims:
+Rule-aware cluster flags:
 
-- `NORMALIZATION_GAP_CANDIDATE` — the same source payload, target zone, and exact `normalized_payload` has no detection in one encoding but positive detection in another;
-- `TARGET_GAP_CANDIDATE` — the same source payload, encoding, and exact `normalized_payload` has no detection in one zone but positive detection in another;
-- `PARTIAL_DETECTION_CANDIDATE` — at least one weak 1-2 score exists; do not automatically raise it;
-- `SCORING_REVIEW_CANDIDATE` — a stronger below-threshold score exists, but matched-rule relevance must still be checked;
+- `CROSS_FAMILY_DETECTION_CANDIDATE` — a scoring-gap case only matched detectors from other families; review the target family coverage rather than raising those scores;
+- `WEAK_RELEVANT_DETECTION_CANDIDATE` — a same-family weak detector matched; review whether a stronger primitive detector is missing;
+- `RELEVANT_SCORING_GAP_CANDIDATE` — a same-family non-weak detector matched below threshold; this is the strongest candidate for actual scoring review;
+- `UNKNOWN_RULE_METADATA` — matched IDs cannot yet be classified using the supplied rule snapshot.
+
+Comparative flags remain conservative:
+
+- `NORMALIZATION_GAP_CANDIDATE` — the same source payload, target zone, and exact `normalized_payload` has no detection in one encoding but relevant positive detection in another;
+- `TARGET_GAP_CANDIDATE` — the same source payload, encoding, and exact `normalized_payload` has no detection in one zone but relevant positive detection in another;
 - `PURE_DETECTION_GAP` — every usable variant in the cluster had no detection;
 - `REPLAY_ERROR_PRESENT` — at least one variant must be replayed successfully before the cluster is considered complete.
 
-### Why exact normalized-payload equality is required
+### Why exact normalized-payload equality and rule relevance are required
 
 A shared `payload_path` alone does not prove that two target variants expose the same value to the WAF. BODY/ARGS/COOKIE/HEADER forms may contain parameter wrappers, URI prefixes, or extraction artifacts. Without this guard, a difference caused by payload extraction can be mislabeled as a WAF target gap.
 
-Therefore comparative normalization/target flags are emitted only inside groups with the same exact `normalized_payload`. Different normalized shapes remain in the same source cluster for manual/partial-detection review but do not create an automatic target/normalization contrast.
+When `--rule-pack` is present, a positive side of a normalization/target contrast must also contain a same-family rule hit. A weak unrelated detector from another pack is not accepted as evidence that the target detector successfully recognized the attack.
 
-The gap-analysis manifest explicitly disables automatic score increases. A true scoring-only gap requires rule metadata proving that the matched rule is relevant to the attack primitive.
+The gap-analysis manifest explicitly disables automatic score increases. Rule metadata narrows review candidates; it never authorizes automatic score changes.
 
 ## 6. Export neutral evidence to waf-rule-engineering
 
@@ -258,7 +302,7 @@ python waf_bypass_tool.py export-corpus \
 
 Default export includes `DETECTION_GAP` and `SCORING_GAP`.
 
-If `gap_analysis` is present, its `primary_workstream` takes precedence over the coarse diagnosis-based workstream. For example, a `SCORING_GAP` observation may correctly be handed off as `normalization-review` rather than `scoring-review` when comparative evidence shows encoding-dependent detection.
+If `gap_analysis` is present, its `primary_workstream` takes precedence over the coarse diagnosis-based workstream. For example, a `SCORING_GAP` observation may correctly be handed off as `normalization-review`, `cross-family-review`, or `partial-detection-review` rather than blindly becoming `scoring-review`.
 
 The handoff remains evidence rather than automatic YAML generation. `waf-rule-engineering` stays the source of truth for DSL-specific rules and tests.
 
