@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .clustering import attack_family
 from .common import read_json
 
 
@@ -33,7 +34,9 @@ def load_classification_config(
     """Load deterministic category mappings.
 
     Payload-level overrides are retained only for backward compatibility with
-    existing invocations. The main classification path is category -> group.
+    existing invocations. The main group-classification path remains
+    category -> group, while generic attack-family and clustering metadata is
+    derived separately from the request itself.
     """
     category_defaults: dict[str, int] = {}
     if taxonomy_path:
@@ -47,6 +50,14 @@ def load_classification_config(
     return category_defaults, legacy_overrides
 
 
+def _family_metadata(category: str, payload_path: str) -> dict[str, str]:
+    family, source = attack_family(category, payload_path)
+    return {
+        "attack_family": family,
+        "attack_family_source": source,
+    }
+
+
 def classify(
     payload_path: str,
     category: str,
@@ -54,12 +65,14 @@ def classify(
     category_defaults: dict[str, int],
     overrides: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
-    """Classify by the stable waf-bypass category.
+    """Classify taxonomy group while also exposing a generic attack family.
 
-    A legacy payload override is consulted only when the category itself has no
-    deterministic mapping. This keeps old configuration files readable without
-    making them part of the normal workflow.
+    Taxonomy assignment and request clustering are intentionally separate:
+    category/group labels describe the source corpus, while attack_family is a
+    stable semantic dimension that can be used across XSS, SQLi, RCE, SSRF and
+    future payload sources.
     """
+    family = _family_metadata(category, payload_path)
     group_id = category_defaults.get(category)
     if group_id is not None:
         group = groups.get(group_id)
@@ -72,6 +85,7 @@ def classify(
             "classification_confidence": "HIGH",
             "classification_reason": f"Deterministic mapping for waf-bypass category {category}",
             "classification_source": "category_default",
+            **family,
         }
 
     override = overrides.get(payload_path)
@@ -89,6 +103,7 @@ def classify(
                 "classification_confidence": str(override.get("confidence", "HIGH")),
                 "classification_reason": str(override.get("reason", "Legacy payload override")),
                 "classification_source": "legacy_override",
+                **family,
             }
 
     return {
@@ -98,4 +113,5 @@ def classify(
         "classification_confidence": "LOW",
         "classification_reason": f"No deterministic mapping for category {category}",
         "classification_source": "unclassified",
+        **family,
     }
