@@ -7,9 +7,10 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
-from .common import code_verdict, normalize_block_codes, read_jsonl, stable_key, utc_now
+from .common import code_verdict, curl_hash, normalize_block_codes, read_jsonl, stable_key, utc_now
+from .correlation import CORRELATION_HEADER, make_case_id, make_replay_run_id, make_test_id
 from .curl_parser import extract_request, split_curl
 
 
@@ -18,7 +19,7 @@ SAFE_OPTIONS_WITH_VALUE = {
     "-X", "--request", "-H", "--header", "-d", "--data", "--data-raw", "--data-binary", "--data-urlencode",
     "--cookie", "--user-agent", "--referer",
 }
-SAFE_FLAG_OPTIONS = {"--compressed", "-k", "--insecure", "--http1.1", "--http2", "--path-as-is"}
+SAFE_FLAG_OPTIONS = {"--compressed", "-k", "--insecure", "--http1.1", "--http2", "--path-as-is", "-g", "--globoff"}
 CONFIRMED_BYPASS_VERDICTS = {"BYPASS_CONFIRMED", "BYPASS_ORIGIN_CONFIRMED"}
 
 
@@ -83,47 +84,69 @@ def _parse_final_headers(raw: bytes) -> tuple[str | None, int | None]:
     return server, status
 
 
+def _parse_write_out(stdout: str) -> tuple[int | None, str | None, str | None, str | None]:
+    text = stdout.strip()
+    if "\t" in text:
+        parts = text.split("\t", 3)
+        code_text = parts[0] if parts else ""
+        remote_ip = parts[1] or None if len(parts) > 1 else None
+        local_ip = parts[2] or None if len(parts) > 2 else None
+        url_effective = parts[3] or None if len(parts) > 3 else None
+    else:
+        code_text = text[-3:]
+        remote_ip = local_ip = url_effective = None
+    http_code = int(code_text) if re.fullmatch(r"\d{3}", code_text) else None
+    return http_code, remote_ip, local_ip, url_effective
+
+
 def verdict(http_code: int | None, server: str | None, block_codes: list[int] | None = None) -> tuple[str, str, str]:
+    """Classify only what can be established from the HTTP response.
+
+    The origin currently identifies itself with nginx/Ubuntu. Absence of that
+    signature does not prove a WAF block; authoritative WAF decisions come from
+    the security log joined by test_id.
+    """
     block_codes = normalize_block_codes(block_codes)
     server_lower = (server or "").lower()
     if "nginx" in server_lower or "ubuntu" in server_lower:
         route = "ORIGIN_CONFIRMED"
-    elif "pingora" in server_lower:
-        route = "WAF_CONFIRMED"
     elif server:
         route = "ROUTE_OTHER"
     else:
-        route = "ROUTE_UNCONFIRMED"
+        route = "NO_ORIGIN_SIGNATURE"
 
     code = code_verdict(http_code, block_codes)
     if http_code is None:
         final = "CHECK_ERROR"
-    elif http_code in block_codes and route == "WAF_CONFIRMED":
-        final = "BLOCKED_BY_WAF"
-    elif http_code not in block_codes and route == "ORIGIN_CONFIRMED":
-        final = "BYPASS_CONFIRMED"
+    elif http_code in block_codes and route == "ORIGIN_CONFIRMED":
+        final = "ORIGIN_BLOCK_RESPONSE"
     elif http_code in block_codes:
-        final = "ROUTE_MISMATCH"
+        final = "HTTP_BLOCK_OBSERVED"
+    elif route == "ORIGIN_CONFIRMED":
+        final = "BYPASS_CONFIRMED"
     else:
         final = "BYPASS_UNCONFIRMED"
     return code, route, final
 
 
-def _execute(record: dict[str, Any], timeout: float) -> dict[str, Any]:
+def _execute(record: dict[str, Any], timeout: float, test_id: str) -> dict[str, Any]:
     argv = split_curl(record["curl"])
     validate_replay_argv(argv)
     with tempfile.NamedTemporaryFile(prefix="waf-headers-", suffix=".txt") as header_file:
         command = argv + [
+            "--globoff",
+            "--header", f"{CORRELATION_HEADER}: {test_id}",
             "--silent", "--show-error", "--output", "/dev/null", "--dump-header", header_file.name,
-            "--write-out", "%{http_code}", "--max-redirs", "0", "--max-time", str(timeout),
+            "--write-out", "%{http_code}\t%{remote_ip}\t%{local_ip}\t%{url_effective}",
+            "--max-redirs", "0", "--max-time", str(timeout),
         ]
         started = time.monotonic()
         completed = subprocess.run(command, shell=False, capture_output=True, timeout=timeout + 5, check=False)
         duration_ms = round((time.monotonic() - started) * 1000)
         header_file.seek(0)
         header_bytes = header_file.read()
-    stdout = completed.stdout.decode("ascii", errors="ignore").strip()
-    http_code = int(stdout[-3:]) if re.fullmatch(r"\d{3}", stdout[-3:]) else None
+    stdout = completed.stdout.decode("utf-8", errors="replace")
+    http_code, remote_ip, local_ip, url_effective = _parse_write_out(stdout)
     server, header_status = _parse_final_headers(header_bytes)
     if http_code is None:
         http_code = header_status
@@ -134,9 +157,20 @@ def _execute(record: dict[str, Any], timeout: float) -> dict[str, Any]:
     return {
         "checked_at": utc_now(), "http_code": http_code, "server_header": server,
         "code_verdict": code, "route_verdict": route, "final_verdict": final,
+        "remote_ip": remote_ip, "local_ip": local_ip, "url_effective": url_effective,
         "duration_ms": duration_ms, "curl_exit_code": completed.returncode,
         "stderr": completed.stderr.decode("utf-8", errors="replace").strip(),
+        "correlation_sent": True,
     }
+
+
+def _case_id(record: dict[str, Any]) -> str:
+    existing = record.get("case_id")
+    if existing:
+        return str(existing)
+    command = str(record.get("curl", ""))
+    command_hash = str(record.get("curl_hash") or curl_hash(command))
+    return make_case_id(str(record["payload_path"]), str(record["variant"]), command_hash)
 
 
 def recheck_records(
@@ -150,8 +184,10 @@ def recheck_records(
     timeout: float,
     delay: float,
     only_confirmed_bypasses: bool = False,
+    only_verdicts: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     records = read_jsonl(input_path)
+    verdict_filter = {str(value).strip().upper() for value in (only_verdicts or []) if str(value).strip()}
     selected = [
         record for record in records
         if (group_id is None or record.get("group_id") == group_id)
@@ -159,14 +195,20 @@ def recheck_records(
             not only_confirmed_bypasses
             or record.get("final_verdict") in CONFIRMED_BYPASS_VERDICTS
         )
+        and (
+            not verdict_filter
+            or str(record.get("final_verdict") or "").upper() in verdict_filter
+        )
     ]
     if limit is not None:
         selected = selected[:limit]
 
+    replay_run_id = make_replay_run_id()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     print(
         f"Replay selection: selected={len(selected)}, execute={execute}, "
-        f"timeout={timeout}s, delay={delay}s, output={output_path}",
+        f"timeout={timeout}s, delay={delay}s, verdict_filter={sorted(verdict_filter)}, "
+        f"replay_run_id={replay_run_id}, output={output_path}",
         file=sys.stderr,
         flush=True,
     )
@@ -183,28 +225,37 @@ def recheck_records(
                 raise ValueError("--allow-host is required together with --execute")
 
             key = stable_key(record)
+            case_id = _case_id(record)
+            test_id = make_test_id(replay_run_id, index, case_id)
             print(
-                f"[{index}/{len(selected)}] replay {key} host={host}",
+                f"[{index}/{len(selected)}] replay {key} case_id={case_id} test_id={test_id} host={host}",
                 file=sys.stderr,
                 flush=True,
             )
             result = dict(record)
             result["stable_key"] = key
+            result["case_id"] = case_id
+            result["replay_run_id"] = replay_run_id
+            result["test_id"] = test_id
+            result["correlation_header"] = CORRELATION_HEADER
             if execute:
                 try:
-                    result.update(_execute(record, timeout))
+                    result.update(_execute(record, timeout, test_id))
                 except Exception as exc:
                     result.update({
                         "checked_at": utc_now(), "http_code": None, "server_header": None,
                         "code_verdict": "UNKNOWN_CODE", "route_verdict": "ROUTE_UNCONFIRMED",
-                        "final_verdict": "CHECK_ERROR", "duration_ms": None,
-                        "curl_exit_code": None, "stderr": str(exc),
+                        "final_verdict": "CHECK_ERROR", "remote_ip": None, "local_ip": None,
+                        "url_effective": None, "duration_ms": None, "curl_exit_code": None,
+                        "stderr": str(exc), "correlation_sent": False,
                     })
                 executed += 1
             else:
                 result.update({
                     "checked_at": None, "server_header": None, "route_verdict": "NOT_CHECKED",
-                    "final_verdict": "DRY_RUN", "duration_ms": None, "curl_exit_code": None, "stderr": "",
+                    "final_verdict": "DRY_RUN", "remote_ip": None, "local_ip": None,
+                    "url_effective": None, "duration_ms": None, "curl_exit_code": None, "stderr": "",
+                    "correlation_sent": False,
                 })
 
             output_handle.write(json.dumps(result, ensure_ascii=False, sort_keys=True))
@@ -212,11 +263,16 @@ def recheck_records(
             output_handle.flush()
             print(
                 f"[{index}/{len(selected)}] result={result.get('final_verdict')} "
-                f"http={result.get('http_code')} duration_ms={result.get('duration_ms')}",
+                f"http={result.get('http_code')} remote_ip={result.get('remote_ip')} "
+                f"duration_ms={result.get('duration_ms')}",
                 file=sys.stderr,
                 flush=True,
             )
             if execute and delay > 0 and index < len(selected):
                 time.sleep(delay)
 
-    return {"selected": len(selected), "executed": executed, "output": str(output_path)}
+    return {
+        "selected": len(selected), "executed": executed, "replay_run_id": replay_run_id,
+        "correlation_header": CORRELATION_HEADER, "verdict_filter": sorted(verdict_filter),
+        "output": str(output_path),
+    }

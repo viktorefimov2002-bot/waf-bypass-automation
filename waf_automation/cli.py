@@ -4,12 +4,17 @@ import argparse
 import json
 from pathlib import Path
 
+from .diagnosis import diagnose_observations
 from .diffing import diff_runs
+from .gap_analysis import analyze_gap_clusters
+from .handoff import export_rule_engineering_corpus
 from .importer import import_report
+from .merge_cases import merge_case_records
 from .recheck import recheck_records
 from .refinement import refine_rules
 from .report import create_compact_report, create_report
 from .rules import suggest_rules
+from .telemetry import correlate_logs
 from .validation import validate_fixes
 
 
@@ -27,6 +32,12 @@ def _add_verify_arguments(command: argparse.ArgumentParser) -> None:
     command.add_argument("--limit", type=int)
     command.add_argument("--timeout", type=float, default=15.0)
     command.add_argument("--delay", type=float, default=0.2)
+    command.add_argument(
+        "--only-verdict",
+        action="append",
+        default=None,
+        help="Replay only records with this prior final_verdict; repeat for multiple values (for example CHECK_ERROR).",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -54,6 +65,54 @@ def build_parser() -> argparse.ArgumentParser:
 
     command = subparsers.add_parser("recheck", help="Deprecated alias for verify")
     _add_verify_arguments(command)
+
+    command = subparsers.add_parser(
+        "correlate-logs",
+        help="Join replay JSONL with WAF security-log telemetry by waf-fp-test-id/test_id",
+    )
+    command.add_argument("--replay", required=True, type=_path, help="verified/replayed JSONL containing test_id")
+    command.add_argument("--security-log", required=True, type=_path, help="Security log as JSONL/JSONEachRow, JSON array, or object with rows/data/result")
+    command.add_argument("--output", required=True, type=_path)
+
+    command = subparsers.add_parser(
+        "diagnose",
+        help="Classify correlated observations as detection/scoring/policy/telemetry outcomes",
+    )
+    command.add_argument("--input", required=True, type=_path, help="observations.jsonl from correlate-logs")
+    command.add_argument("--output", required=True, type=_path)
+
+    command = subparsers.add_parser(
+        "merge-cases",
+        help="Replace older JSONL records with newer records using stable case_id identity",
+    )
+    command.add_argument("--base", required=True, type=_path)
+    command.add_argument("--updates", required=True, type=_path)
+    command.add_argument("--output", required=True, type=_path)
+
+    command = subparsers.add_parser(
+        "analyze-gaps",
+        help="Cluster diagnosed variants and identify normalization/target/partial/scoring candidates",
+    )
+    command.add_argument("--input", required=True, type=_path, help="diagnosed.jsonl from diagnose")
+    command.add_argument("--output-dir", required=True, type=_path)
+    command.add_argument(
+        "--rule-pack",
+        type=_path,
+        help="Optional deployed YAML/JSON ruleset. Enables same-family vs cross-family matched-rule analysis.",
+    )
+
+    command = subparsers.add_parser(
+        "export-corpus",
+        help="Export diagnosed attack cases as a neutral handoff corpus for waf-rule-engineering",
+    )
+    command.add_argument("--input", required=True, type=_path, help="diagnosed.jsonl or analyze-gaps cases.jsonl")
+    command.add_argument("--output-dir", required=True, type=_path)
+    command.add_argument(
+        "--diagnosis",
+        action="append",
+        default=None,
+        help="Diagnosis to export; repeat for multiple values. Default: DETECTION_GAP and SCORING_GAP.",
+    )
 
     command = subparsers.add_parser(
         "validate-fix",
@@ -109,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
             limit=args.limit,
             timeout=args.timeout,
             delay=args.delay,
+            only_verdicts=args.only_verdict,
         )
         result["command"] = "verify"
         if args.report_xlsx:
@@ -116,6 +176,16 @@ def main(argv: list[str] | None = None) -> int:
             result["report_xlsx"] = report_result["output"]
         if args.command == "recheck":
             result["warning"] = "The recheck command is deprecated; use verify instead."
+    elif args.command == "correlate-logs":
+        result = correlate_logs(args.replay, args.security_log, args.output)
+    elif args.command == "diagnose":
+        result = diagnose_observations(args.input, args.output)
+    elif args.command == "merge-cases":
+        result = merge_case_records(args.base, args.updates, args.output)
+    elif args.command == "analyze-gaps":
+        result = analyze_gap_clusters(args.input, args.output_dir, args.rule_pack)
+    elif args.command == "export-corpus":
+        result = export_rule_engineering_corpus(args.input, args.output_dir, args.diagnosis)
     elif args.command == "validate-fix":
         result = validate_fixes(
             args.before,

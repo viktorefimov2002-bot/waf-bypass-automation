@@ -31,11 +31,11 @@ class ToolTests(unittest.TestCase):
         self.assertIn("js_unicode", steps)
 
     def test_verdict_matrix_and_custom_block_code(self) -> None:
-        self.assertEqual(verdict(403, "pingora", [403])[2], "BLOCKED_BY_WAF")
-        self.assertEqual(verdict(200, "nginx/1.24.0 (Ubuntu)", [403])[2], "BYPASS_CONFIRMED")
-        self.assertEqual(verdict(200, "pingora", [403])[2], "BYPASS_UNCONFIRMED")
-        self.assertEqual(verdict(403, "nginx/1.24.0 (Ubuntu)", [403])[2], "ROUTE_MISMATCH")
-        self.assertEqual(verdict(406, "pingora", [406])[2], "BLOCKED_BY_WAF")
+        self.assertEqual(verdict(403, None, [403]), ("BLOCKED_BY_CODE", "NO_ORIGIN_SIGNATURE", "HTTP_BLOCK_OBSERVED"))
+        self.assertEqual(verdict(200, "nginx/1.24.0 (Ubuntu)", [403]), ("BYPASS_BY_CODE", "ORIGIN_CONFIRMED", "BYPASS_CONFIRMED"))
+        self.assertEqual(verdict(200, None, [403]), ("BYPASS_BY_CODE", "NO_ORIGIN_SIGNATURE", "BYPASS_UNCONFIRMED"))
+        self.assertEqual(verdict(403, "nginx/1.24.0 (Ubuntu)", [403]), ("BLOCKED_BY_CODE", "ORIGIN_CONFIRMED", "ORIGIN_BLOCK_RESPONSE"))
+        self.assertEqual(verdict(406, "custom-edge", [406]), ("BLOCKED_BY_CODE", "ROUTE_OTHER", "HTTP_BLOCK_OBSERVED"))
         self.assertEqual(code_verdict(406, [406]), "BLOCKED_BY_CODE")
         self.assertEqual(code_verdict(403, [406]), "BYPASS_BY_CODE")
 
@@ -207,6 +207,8 @@ class ToolTests(unittest.TestCase):
 
     def test_validate_fix_statuses(self) -> None:
         self.assertEqual(_fix_status({"final_verdict": "BLOCKED_BY_WAF"}), "FIXED")
+        self.assertEqual(_fix_status({"final_verdict": "HTTP_BLOCK_OBSERVED"}), "NEEDS_REVIEW")
+        self.assertEqual(_fix_status({"final_verdict": "ORIGIN_BLOCK_RESPONSE"}), "NEEDS_REVIEW")
         self.assertEqual(_fix_status({"final_verdict": "BYPASS_CONFIRMED"}), "STILL_BYPASSED")
         self.assertEqual(_fix_status({"final_verdict": "CHECK_ERROR"}), "ERROR")
         self.assertEqual(_fix_status({"final_verdict": "BYPASS_UNCONFIRMED"}), "NEEDS_REVIEW")
@@ -223,7 +225,7 @@ class ToolTests(unittest.TestCase):
             blocked = {
                 "payload_path": "XSS/2.json", "variant": "ARGS", "group_id": 85,
                 "group_name": "XSS", "final_verdict": "BLOCKED_BY_WAF",
-                "http_code": 403, "server_header": "pingora", "curl": "curl https://example.test/",
+                "http_code": 403, "server_header": None, "curl": "curl https://example.test/",
             }
             write_jsonl(before, [confirmed, blocked])
             output_jsonl = root / "validation.jsonl"
@@ -231,7 +233,13 @@ class ToolTests(unittest.TestCase):
 
             def fake_recheck(input_path, output_path, **kwargs):
                 self.assertTrue(kwargs["only_confirmed_bypasses"])
-                write_jsonl(output_path, [{**confirmed, "http_code": 403, "server_header": "pingora", "final_verdict": "BLOCKED_BY_WAF"}])
+                write_jsonl(output_path, [{
+                    **confirmed,
+                    "http_code": 403,
+                    "server_header": None,
+                    "route_verdict": "NO_ORIGIN_SIGNATURE",
+                    "final_verdict": "HTTP_BLOCK_OBSERVED",
+                }])
                 return {"selected": 1, "executed": 1, "output": str(output_path)}
 
             with patch("waf_automation.validation.recheck_records", side_effect=fake_recheck):
@@ -240,8 +248,12 @@ class ToolTests(unittest.TestCase):
                     group_id=None, limit=None, timeout=5, delay=0,
                 )
             self.assertEqual(summary["records"], 1)
-            self.assertEqual(summary["fixed"], 1)
-            self.assertEqual(read_jsonl(output_jsonl)[0]["status"], "FIXED")
+            self.assertEqual(summary["fixed"], 0)
+            self.assertEqual(summary["needs_review"], 1)
+            row = read_jsonl(output_jsonl)[0]
+            self.assertEqual(row["status"], "NEEDS_REVIEW")
+            self.assertTrue(row["request_blocked_now"])
+            self.assertFalse(row["waf_block_confirmed_by_replay"])
             self.assertTrue(output_xlsx.exists())
 
 

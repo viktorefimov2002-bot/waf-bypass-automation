@@ -5,6 +5,7 @@ from typing import Any
 
 from .classifier import classify, load_classification_config, load_groups
 from .common import SCHEMA_VERSION, code_verdict, curl_hash, make_run_id, normalize_block_codes, parse_response_code, read_json, utc_now, write_jsonl
+from .correlation import make_case_id
 from .curl_parser import extract_payload_details, extract_request, normalize_payload_details, parse_variant
 
 
@@ -49,9 +50,11 @@ def import_report(
             normalization = normalize_payload_details(raw_payload, encoding)
             response_raw = results[variant]
             http_code = parse_response_code(response_raw)
+            command_hash = curl_hash(command)
             record = {
                 "schema_version": SCHEMA_VERSION,
                 "run_id": run_id,
+                "case_id": make_case_id(payload_path, variant, command_hash),
                 "imported_at": imported_at,
                 "report_file": report_path.name,
                 "target": target,
@@ -65,7 +68,7 @@ def import_report(
                 "http_code": http_code,
                 "code_verdict": code_verdict(http_code, block_codes),
                 "curl": command,
-                "curl_hash": curl_hash(command),
+                "curl_hash": command_hash,
                 "request_host": request["host"],
                 "request_method": request["method"],
                 "request_path": request["path"],
