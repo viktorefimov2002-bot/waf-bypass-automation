@@ -42,6 +42,29 @@ class GapAnalysisTests(unittest.TestCase):
             },
         }
 
+    def _rule_pack(self, path: Path) -> None:
+        path.write_text(
+            """version: 1
+rules:
+  - id: 10280
+    name: xss-weak-support
+    score: 1
+    severity: notice
+    tags: [xss, weak-signal]
+  - id: 10300
+    name: xss-contextual-detector
+    score: 4
+    severity: error
+    tags: [xss, contextual-signal]
+  - id: 14020
+    name: php-context-detector
+    score: 4
+    severity: error
+    tags: [php, contextual-signal]
+""",
+            encoding="utf-8",
+        )
+
     def test_evidence_status_keeps_weak_detection_separate_from_true_gap(self) -> None:
         weak = self._record("XSS/1.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 1, "10280")
         stronger = self._record("XSS/1.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 4, "20140")
@@ -112,6 +135,55 @@ class GapAnalysisTests(unittest.TestCase):
             cluster = read_jsonl(output_dir / "clusters.jsonl")[0]
             self.assertEqual(cluster["target_contrasts"], [])
             self.assertEqual(cluster["normalized_payload_variant_count"], 2)
+
+    def test_rule_pack_separates_relevant_cross_family_and_unknown_hits(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "diagnosed.jsonl"
+            records = [
+                self._record("XSS/1.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 1, "10280"),
+                self._record("XSS/2.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 4, "14020"),
+                self._record("XSS/3.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 4, "10300"),
+                self._record("XSS/4.json", "ARGS", "ARGS", "NONE", "SCORING_GAP", 1, "99999"),
+            ]
+            write_jsonl(source, records)
+            rule_pack = root / "deployed.yaml"
+            self._rule_pack(rule_pack)
+            output_dir = root / "gap-analysis"
+            summary = analyze_gap_clusters(source, output_dir, rule_pack)
+
+            self.assertEqual(summary["cluster_flags"]["WEAK_RELEVANT_DETECTION_CANDIDATE"], 1)
+            self.assertEqual(summary["cluster_flags"]["CROSS_FAMILY_DETECTION_CANDIDATE"], 1)
+            self.assertEqual(summary["cluster_flags"]["RELEVANT_SCORING_GAP_CANDIDATE"], 1)
+            self.assertEqual(summary["cluster_flags"]["UNKNOWN_RULE_METADATA"], 1)
+            self.assertEqual(summary["rule_metadata"]["rules_loaded"], 3)
+            self.assertEqual(summary["rule_metadata"]["matched_rule_references_unknown"], 1)
+
+            cases = {record["payload_path"]: record for record in read_jsonl(output_dir / "cases.jsonl")}
+            self.assertEqual(cases["XSS/1.json"]["gap_analysis"]["rule_relevance_status"], "RELEVANT_WEAK_ONLY")
+            self.assertEqual(cases["XSS/2.json"]["gap_analysis"]["rule_relevance_status"], "CROSS_FAMILY_ONLY")
+            self.assertEqual(cases["XSS/3.json"]["gap_analysis"]["rule_relevance_status"], "RELEVANT_NON_WEAK")
+            self.assertEqual(cases["XSS/4.json"]["gap_analysis"]["rule_relevance_status"], "UNKNOWN_RULE_METADATA")
+            self.assertEqual(cases["XSS/2.json"]["gap_analysis"]["matched_rule_evidence"][0]["family"], "php")
+
+    def test_cross_family_hit_is_not_normalization_positive_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "diagnosed.jsonl"
+            records = [
+                self._record("XSS/5.json", "ARGS", "ARGS", "NONE", "DETECTION_GAP", 0),
+                self._record("XSS/5.json", "ARGS:BASE64", "ARGS", "BASE64", "SCORING_GAP", 4, "14020"),
+            ]
+            write_jsonl(source, records)
+            rule_pack = root / "deployed.yaml"
+            self._rule_pack(rule_pack)
+            output_dir = root / "gap-analysis"
+            summary = analyze_gap_clusters(source, output_dir, rule_pack)
+
+            self.assertNotIn("NORMALIZATION_GAP_CANDIDATE", summary["cluster_flags"])
+            cluster = read_jsonl(output_dir / "clusters.jsonl")[0]
+            self.assertEqual(cluster["normalization_contrasts"], [])
+            self.assertIn("CROSS_FAMILY_DETECTION_CANDIDATE", cluster["flags"])
 
     def test_handoff_prefers_gap_analysis_workstream(self) -> None:
         record = self._record("XSS/276.json", "ARGS:BASE64", "ARGS", "BASE64", "SCORING_GAP", 4, "20140")
