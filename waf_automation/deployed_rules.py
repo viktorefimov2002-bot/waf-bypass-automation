@@ -97,7 +97,7 @@ def _family_from_rule(rule: dict[str, Any], tags: list[str]) -> str | None:
     return None
 
 
-def _confidence(tags: list[str]) -> str:
+def _confidence(tags: list[str], score: int | None) -> str:
     tag_set = set(tags)
     if tag_set & WEAK_TAGS:
         return "weak"
@@ -105,6 +105,8 @@ def _confidence(tags: list[str]) -> str:
         return "strong"
     if tag_set & CONTEXTUAL_TAGS:
         return "contextual"
+    if score is not None and score <= 2:
+        return "weak"
     return "unspecified"
 
 
@@ -128,7 +130,7 @@ def normalize_deployed_rule(rule: dict[str, Any]) -> dict[str, Any]:
         "action": rule.get("action"),
         "enforcement": rule.get("enforcement"),
         "tags": tags,
-        "confidence": _confidence(tags),
+        "confidence": _confidence(tags, score),
     }
 
 
