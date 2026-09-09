@@ -7,7 +7,7 @@ name = "waf-bypass-automation"
 version = "0.1.0"
 description = "Normalize, recheck, diff and propose SecLang candidates for nemesida/waf-bypass reports"
 requires-python = ">=3.11"
-dependencies = ["openpyxl>=3.1,<4"]
+dependencies = ["openpyxl>=3.1,<4", "PyYAML>=6.0,<7"]
 
 [project.scripts]
 waf-bypass-tool = "waf_automation.cli:main"
