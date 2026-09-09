@@ -15,9 +15,69 @@ STANDARD_HEADERS = {
 _SAFE_ARGUMENT_NAME_RE = re.compile(r"^[A-Za-z0-9_.~-]{1,64}$")
 _BASE64_QUERY_RE = re.compile(r"^[A-Za-z0-9+/]{8,}={1,2}$")
 
+# Options that consume the following argv token. Keeping this list explicit is
+# important for URL discovery: payloads frequently contain absolute URLs
+# (SSRF/RFI), and those values must not be mistaken for the request URL.
+_VALUE_OPTIONS = {
+    "-X", "--request", "-H", "--header", "-d", "--data", "--data-raw",
+    "--data-binary", "--data-urlencode", "-A", "--user-agent", "-e", "--referer",
+    "-b", "--cookie", "-u", "--user", "-x", "--proxy", "-o", "--output",
+    "-w", "--write-out", "--connect-timeout", "--max-time", "--resolve",
+    "--connect-to", "--interface", "--cacert", "--cert", "--key", "--url",
+}
+_SHORT_ATTACHED_VALUE_OPTIONS = {"-X", "-H", "-d", "-A", "-e", "-b", "-u", "-x", "-o", "-w"}
+
+
+def _tolerant_split(command: str) -> list[str]:
+    """Best-effort lexer for malformed shell quoting without executing a shell.
+
+    Normal nemesida output should be valid shell and is handled by shlex. This
+    fallback exists for payloads whose literal quote characters make the
+    generated diagnostic cURL syntactically invalid. It preserves argument
+    boundaries conservatively and is used for parsing only; replay validation
+    still runs on the resulting argv and never invokes a shell.
+    """
+    tokens: list[str] = []
+    current: list[str] = []
+    quote: str | None = None
+    escaped = False
+
+    for char in command.strip():
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\" and quote != "'":
+            escaped = True
+            continue
+        if quote:
+            if char == quote:
+                quote = None
+            else:
+                current.append(char)
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            continue
+        if char.isspace():
+            if current:
+                tokens.append("".join(current))
+                current = []
+            continue
+        current.append(char)
+
+    if escaped:
+        current.append("\\")
+    if current:
+        tokens.append("".join(current))
+    return tokens
+
 
 def split_curl(command: str) -> list[str]:
-    argv = shlex.split(command, posix=True)
+    try:
+        argv = shlex.split(command, posix=True)
+    except ValueError:
+        argv = _tolerant_split(command)
     if not argv or argv[0] != "curl":
         raise ValueError("Command is not a curl command")
     return argv
@@ -32,15 +92,49 @@ def _option_values(argv: list[str], names: set[str]) -> list[str]:
             values.append(argv[index + 1])
             index += 2
             continue
+        matched = False
+        for name in names:
+            if name.startswith("--") and item.startswith(name + "="):
+                values.append(item.split("=", 1)[1])
+                matched = True
+                break
+            if name in _SHORT_ATTACHED_VALUE_OPTIONS and item.startswith(name) and item != name:
+                values.append(item[len(name):])
+                matched = True
+                break
         index += 1
+        if matched:
+            continue
     return values
+
+
+def _request_urls(argv: list[str]) -> list[str]:
+    """Return actual transfer URLs, excluding URL-looking option values."""
+    explicit_urls = _option_values(argv, {"--url"})
+    positional: list[str] = []
+    index = 1
+    while index < len(argv):
+        item = argv[index]
+        if item in _VALUE_OPTIONS:
+            index += 2
+            continue
+        if any(item.startswith(name + "=") for name in _VALUE_OPTIONS if name.startswith("--")):
+            index += 1
+            continue
+        if any(item.startswith(name) and item != name for name in _SHORT_ATTACHED_VALUE_OPTIONS):
+            index += 1
+            continue
+        if not item.startswith("-") and item.startswith(("http://", "https://")):
+            positional.append(item)
+        index += 1
+    return explicit_urls + positional
 
 
 def extract_request(command: str) -> dict[str, Any]:
     argv = split_curl(command)
-    urls = [item for item in argv if item.startswith(("http://", "https://"))]
+    urls = _request_urls(argv)
     if len(urls) != 1:
-        raise ValueError(f"Expected exactly one URL, got {len(urls)}")
+        raise ValueError(f"Expected exactly one request URL, got {len(urls)}")
     url = urls[0]
     parsed = urlparse(url)
     method_values = _option_values(argv, {"-X", "--request"})
