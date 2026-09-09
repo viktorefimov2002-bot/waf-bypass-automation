@@ -91,10 +91,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     command = subparsers.add_parser(
         "analyze-gaps",
-        help="Cluster diagnosed variants by source payload and identify comparative normalization/target/partial-detection candidates",
+        help="Cluster diagnosed variants and identify normalization/target/partial/scoring candidates",
     )
     command.add_argument("--input", required=True, type=_path, help="diagnosed.jsonl from diagnose")
     command.add_argument("--output-dir", required=True, type=_path)
+    command.add_argument(
+        "--rule-pack",
+        type=_path,
+        help="Optional deployed YAML/JSON ruleset. Enables same-family vs cross-family matched-rule analysis.",
+    )
 
     command = subparsers.add_parser(
         "export-corpus",
@@ -178,7 +183,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.command == "merge-cases":
         result = merge_case_records(args.base, args.updates, args.output)
     elif args.command == "analyze-gaps":
-        result = analyze_gap_clusters(args.input, args.output_dir)
+        result = analyze_gap_clusters(args.input, args.output_dir, args.rule_pack)
     elif args.command == "export-corpus":
         result = export_rule_engineering_corpus(args.input, args.output_dir, args.diagnosis)
     elif args.command == "validate-fix":
